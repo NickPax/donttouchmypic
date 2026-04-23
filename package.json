@@ -1,0 +1,26 @@
+{
+  "name": "donttouchmypic",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "deploy": "astro build && wrangler pages deploy ./dist --project-name=donttouchmypic"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.2.1",
+    "@tailwindcss/vite": "~4.1.14",
+    "astro": "^5.0.0",
+    "heic2any": "^0.0.4",
+    "jszip": "^3.10.1",
+    "tailwindcss": "~4.1.14"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "wrangler": "^3.90.0"
+  }
+}

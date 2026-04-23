@@ -1,0 +1,142 @@
+---
+type Tool = {
+  href: string;
+  kicker: string;
+  title: string;
+  body: string;
+  cta: string;
+  accent: 'emerald' | 'navy' | 'amber' | 'ink';
+  icon: string;
+  live: boolean;
+};
+
+const tools: Tool[] = [
+  {
+    href: '/heic-to-jpg',
+    kicker: '01',
+    title: 'HEIC → JPG',
+    body: 'Convert iPhone photos to standard JPG that every app and website actually understands. Batch-friendly. Zero uploads.',
+    cta: 'Convert HEIC',
+    accent: 'emerald',
+    icon: `<rect x="3" y="5" width="7" height="11" rx="1"/><rect x="14" y="8" width="7" height="11" rx="1"/><path d="M10 12h4" stroke-width="2"/><path d="M13 9l2 3-2 3" stroke-width="2"/>`,
+    live: true,
+  },
+  {
+    href: '/convert',
+    kicker: '02',
+    title: 'Convert',
+    body: 'PNG ↔ JPG ↔ WebP. Pick your input, pick your output, done. Transparency respected where it can be.',
+    cta: 'Convert images',
+    accent: 'navy',
+    icon: `<path d="M4 9a7 7 0 0 1 12-3l3 3"/><path d="M19 4v5h-5"/><path d="M20 15a7 7 0 0 1-12 3l-3-3"/><path d="M5 20v-5h5"/>`,
+    live: false,
+  },
+  {
+    href: '/compress',
+    kicker: '03',
+    title: 'Compress',
+    body: 'Shrink megabyte-heavy photos so they fit WhatsApp, email and web uploads. Light, medium, or ruthless.',
+    cta: 'Compress images',
+    accent: 'amber',
+    icon: `<rect x="4" y="9" width="16" height="7" rx="1"/><path d="M8 5l4 2 4-2M8 20l4-2 4 2"/>`,
+    live: false,
+  },
+  {
+    href: '/resize',
+    kicker: '04',
+    title: 'Resize',
+    body: 'Set a target width, height, or percentage. Aspect-locked by default. Works on a whole folder in one go.',
+    cta: 'Resize images',
+    accent: 'emerald',
+    icon: `<rect x="6" y="6" width="12" height="12"/><path d="M3 3l4 4M21 21l-4-4M3 21l4-4M21 3l-4 4"/>`,
+    live: false,
+  },
+  {
+    href: '/crop',
+    kicker: '05',
+    title: 'Crop',
+    body: 'Click-and-drag to isolate the good bit. No template library, no upsell — just you, the image, and some crop marks.',
+    cta: 'Crop an image',
+    accent: 'ink',
+    icon: `<path d="M7 3v4M7 7H3M17 17v4M17 17h4M7 7h10v10H7z"/>`,
+    live: false,
+  },
+  {
+    href: '/rotate',
+    kicker: '06',
+    title: 'Rotate',
+    body: 'Fix sideways iPhone photos, tilt-correct a horizon, or flip for a mirror. 90° steps or free-angle.',
+    cta: 'Rotate images',
+    accent: 'navy',
+    icon: `<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>`,
+    live: false,
+  },
+];
+
+const liveCount = tools.filter((t) => t.live).length;
+const headline = `${tools.length} tools, zero servers.`;
+---
+<section class="mx-auto max-w-[1320px] px-5 sm:px-8 py-20">
+  <div class="flex items-end justify-between flex-wrap gap-6 mb-10">
+    <div>
+      <div class="section-num">§02 · Tools</div>
+      <h2 class="mt-2 display-2">{headline}</h2>
+    </div>
+    <p class="max-w-md text-sm text-[color-mix(in_srgb,var(--color-ink)_78%,transparent)]">
+      Everything runs inside your browser tab. {liveCount} live today — the rest are on the way, and they'll never upload a single pixel either.
+    </p>
+  </div>
+
+  <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+    {tools.map((t, i) => {
+      const Tag = t.live ? 'a' : 'div';
+      const props = t.live
+        ? { href: t.href }
+        : { 'aria-disabled': 'true', role: 'group' };
+
+      return (
+        <Tag
+          {...props}
+          class:list={[
+            'group card p-7 flex flex-col min-h-[300px] relative overflow-hidden transition-transform',
+            t.live ? 'hover:-translate-y-1' : 'opacity-75 cursor-default',
+            (i % 3 === 1) ? 'lg:translate-y-4' : '',
+          ]}
+        >
+          <div class="flex items-start justify-between">
+            <span class="font-mono text-[11px] tracking-[0.2em] uppercase text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]">
+              Tool · {t.kicker}
+            </span>
+            <span
+              class:list={[
+                'w-10 h-10 rounded-sm inline-flex items-center justify-center',
+                t.accent === 'emerald' && 'bg-[var(--color-emerald-lt)] text-[var(--color-emerald-dk)]',
+                t.accent === 'navy'    && 'bg-[var(--color-navy-800)] text-[var(--color-paper)]',
+                t.accent === 'amber'   && 'bg-[color-mix(in_srgb,var(--color-amber)_18%,var(--color-cream))] text-[var(--color-amber)]',
+                t.accent === 'ink'     && 'bg-[var(--color-ink)] text-[var(--color-paper)]',
+              ]}
+            >
+              <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" set:html={t.icon}></svg>
+            </span>
+          </div>
+
+          <h3 class="mt-7 display-2">{t.title}<span class="text-[var(--color-emerald-dk)]">.</span></h3>
+          <p class="mt-3 text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--color-ink)_82%,transparent)] max-w-sm">{t.body}</p>
+
+          <div class="mt-auto pt-8 flex items-center justify-between gap-3">
+            <span class:list={[
+              'font-mono text-[12px] tracking-[0.12em] uppercase transition-colors',
+              t.live && 'group-hover:text-[var(--color-emerald-dk)]',
+            ]}>
+              {t.live ? `${t.cta} →` : 'In the oven'}
+            </span>
+            <span class:list={['chip', t.live ? 'chip-green' : '']}>{t.live ? 'Local only' : 'Coming soon'}</span>
+          </div>
+
+          <!-- Decorative corner rule -->
+          <span aria-hidden="true" class="absolute right-0 bottom-0 w-16 h-16 border-l border-t border-[var(--color-rule)] translate-x-[65%] translate-y-[65%]"></span>
+        </Tag>
+      );
+    })}
+  </div>
+</section>

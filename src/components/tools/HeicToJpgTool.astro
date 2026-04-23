@@ -1,0 +1,362 @@
+---
+// Client-side HEIC → JPG converter.
+// Strategy: heic2any (libheif WASM) decodes each file in the browser, re-encodes
+// as JPEG at the user's chosen quality, then either downloads a single file or
+// bundles many into a zip via JSZip. Nothing leaves the tab.
+import AdSlot from '../AdSlot.astro';
+---
+<section id="tool" class="mx-auto max-w-[1320px] px-5 sm:px-8 pt-10 pb-16">
+  <div class="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8">
+    <div>
+      <!-- Drop zone -->
+      <div
+        id="dropzone"
+        class="drop-target relative rounded-sm p-10 md:p-14 text-center cursor-pointer"
+        role="button"
+        tabindex="0"
+        aria-label="Drop HEIC photos here, or click to browse"
+      >
+        <div class="scanline rounded-sm" data-scanline hidden></div>
+        <div class="relative">
+          <div class="mx-auto w-14 h-14 inline-flex items-center justify-center rounded-sm bg-[var(--color-emerald-lt)] text-[var(--color-emerald-dk)]">
+            <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="7" height="11" rx="1"/><rect x="14" y="8" width="7" height="11" rx="1"/><path d="M10 12h4"/><path d="M13 9l2 3-2 3"/></svg>
+          </div>
+          <h2 class="mt-5 display-3">Drop HEIC photos here.</h2>
+          <p class="mt-2 text-sm text-[color-mix(in_srgb,var(--color-ink)_75%,transparent)]">
+            Or <button type="button" id="browse" class="underline decoration-[var(--color-emerald-dk)] decoration-2 underline-offset-4">browse</button>.
+            HEIC &amp; HEIF · as many as your browser can hold.
+          </p>
+        </div>
+        <input id="file-input" type="file" accept=".heic,.heif,image/heic,image/heif" multiple class="sr-only" />
+      </div>
+
+      <!-- File panel -->
+      <div id="file-panel" class="mt-6 hidden">
+        <div class="card p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="chip chip-ink" id="chip-count">0 files</span>
+              <span class="chip" id="chip-size">0 B</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="add-more" class="btn btn-ghost !py-2 !px-3">Add more</button>
+              <button type="button" id="clear-all" class="btn btn-ghost !py-2 !px-3">Clear</button>
+            </div>
+          </div>
+
+          <ul id="file-list" class="divide-y divide-[var(--color-rule)]"></ul>
+
+          <!-- Quality -->
+          <div class="mt-6 rule pt-5">
+            <div class="flex items-center justify-between">
+              <label for="quality" class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">
+                JPEG quality
+              </label>
+              <span class="font-mono text-sm"><span id="quality-val">92</span>%</span>
+            </div>
+            <input id="quality" type="range" min="50" max="100" step="1" value="92" class="w-full mt-3 accent-[var(--color-emerald-dk)]" />
+            <p class="mt-2 text-xs text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">
+              Higher = bigger file, closer to the original. 92% is the Apple-friendly sweet spot.
+            </p>
+          </div>
+
+          <!-- Action bar -->
+          <div class="mt-6 flex flex-wrap items-center justify-between gap-4 rule pt-5">
+            <div class="flex-1 min-w-[240px]">
+              <div class="flex items-center justify-between mb-1.5 font-mono text-[11px] tracking-[0.12em] uppercase text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">
+                <span id="status-label">Idle</span>
+                <span id="progress-num">0%</span>
+              </div>
+              <div class="bar"><span id="progress-bar" style="width:0%"></span></div>
+            </div>
+            <button id="convert-btn" class="btn btn-primary" disabled>
+              Convert &amp; download
+              <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v14M6 11l6 6 6-6M5 21h14"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="err" role="alert" class="mt-6 hidden border border-[var(--color-red-stamp)] bg-[color-mix(in_srgb,#f4d6d1_50%,transparent)] text-[var(--color-red-stamp)] font-mono text-xs uppercase tracking-[0.14em] p-3 rounded-sm"></div>
+    </div>
+
+    <aside class="space-y-5">
+      <div class="card p-5">
+        <div class="section-num">Local runtime</div>
+        <h3 class="font-display text-[22px] mt-1 leading-tight">What's running?</h3>
+        <ul class="mt-3 text-sm space-y-2 font-mono">
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Decoder</span><span>libheif (WASM)</span></li>
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Encoder</span><span>Canvas → JPEG</span></li>
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Network</span><span class="text-[var(--color-emerald-dk)]">idle</span></li>
+        </ul>
+      </div>
+      <AdSlot position="heic-sidebar" size="300x250" />
+      <div class="card-ink p-5">
+        <div class="font-mono text-[11px] tracking-[0.2em] uppercase opacity-80">Good to know</div>
+        <p class="mt-2 text-[15px] leading-relaxed">
+          EXIF metadata (location, camera, timestamp) is <em class="font-display not-italic">stripped</em> by default — the JPG comes out clean. If you need to keep the camera info but ditch the location, that's coming later.
+        </p>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<script>
+  import heic2any from 'heic2any';
+  import JSZip from 'jszip';
+  import { formatBytes, downloadBlob, stripExtension, todayStamp } from '../../lib/format.ts';
+
+  type Status = 'ready' | 'converting' | 'done' | 'error';
+  type Item = {
+    id: string;
+    file: File;
+    status: Status;
+    jpegBlob?: Blob;
+    jpegSize?: number;
+    error?: string;
+  };
+
+  const dropzone    = document.getElementById('dropzone') as HTMLDivElement;
+  const input       = document.getElementById('file-input') as HTMLInputElement;
+  const browse      = document.getElementById('browse') as HTMLButtonElement;
+  const panel       = document.getElementById('file-panel') as HTMLDivElement;
+  const listEl      = document.getElementById('file-list') as HTMLUListElement;
+  const chipCount   = document.getElementById('chip-count') as HTMLSpanElement;
+  const chipSize    = document.getElementById('chip-size') as HTMLSpanElement;
+  const addMoreBtn  = document.getElementById('add-more') as HTMLButtonElement;
+  const clearBtn    = document.getElementById('clear-all') as HTMLButtonElement;
+  const qSlider     = document.getElementById('quality') as HTMLInputElement;
+  const qVal        = document.getElementById('quality-val') as HTMLSpanElement;
+  const convertBtn  = document.getElementById('convert-btn') as HTMLButtonElement;
+  const progBar     = document.getElementById('progress-bar') as HTMLSpanElement;
+  const progNum     = document.getElementById('progress-num') as HTMLSpanElement;
+  const statusLabel = document.getElementById('status-label') as HTMLSpanElement;
+  const errEl       = document.getElementById('err') as HTMLDivElement;
+  const scan        = dropzone.querySelector('[data-scanline]') as HTMLDivElement;
+
+  const items: Item[] = [];
+  let working = false;
+
+  function showErr(msg: string) {
+    errEl.textContent = msg;
+    errEl.classList.remove('hidden');
+    setTimeout(() => errEl.classList.add('hidden'), 6000);
+  }
+  function setProgress(pct: number, label?: string) {
+    const c = Math.max(0, Math.min(100, pct));
+    progBar.style.width = `${c}%`;
+    progNum.textContent = `${Math.round(c)}%`;
+    if (label) statusLabel.textContent = label;
+  }
+  function isHeic(f: File): boolean {
+    const name = f.name.toLowerCase();
+    if (name.endsWith('.heic') || name.endsWith('.heif')) return true;
+    const t = (f.type || '').toLowerCase();
+    return t === 'image/heic' || t === 'image/heif';
+  }
+
+  function render() {
+    if (items.length === 0) {
+      panel.classList.add('hidden');
+      return;
+    }
+    panel.classList.remove('hidden');
+
+    const totalSize = items.reduce((acc, it) => acc + it.file.size, 0);
+    chipCount.textContent = `${items.length} file${items.length === 1 ? '' : 's'}`;
+    chipSize.textContent  = formatBytes(totalSize);
+
+    listEl.innerHTML = '';
+    for (const item of items) {
+      listEl.appendChild(renderItem(item));
+    }
+
+    const anyReady = items.some((i) => i.status === 'ready');
+    convertBtn.disabled = working || !anyReady;
+  }
+
+  function renderItem(item: Item): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'py-3 flex items-center gap-3 min-w-0';
+
+    const badge = document.createElement('span');
+    badge.className = 'shrink-0 w-10 h-12 border border-[var(--color-rule)] rounded-sm flex items-center justify-center font-mono text-[10px] tracking-[0.1em] bg-[var(--color-paper)]';
+    badge.textContent = 'HEIC';
+    li.appendChild(badge);
+
+    const body = document.createElement('div');
+    body.className = 'min-w-0 flex-1';
+    const name = document.createElement('div');
+    name.className = 'font-display text-[18px] truncate';
+    name.textContent = item.file.name;
+    const meta = document.createElement('div');
+    meta.className = 'font-mono text-[11px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]';
+    let metaText = formatBytes(item.file.size);
+    if (item.status === 'converting') metaText += ' · converting…';
+    else if (item.status === 'done')   metaText += ` → ${formatBytes(item.jpegSize ?? 0)} · converted`;
+    else if (item.status === 'error')  metaText += ` · ${item.error ?? 'error'}`;
+    else                                metaText += ' · ready';
+    meta.textContent = metaText;
+    if (item.status === 'error')  meta.classList.add('text-[var(--color-red-stamp)]');
+    if (item.status === 'done')   meta.classList.add('text-[var(--color-emerald-dk)]');
+    body.appendChild(name);
+    body.appendChild(meta);
+    li.appendChild(body);
+
+    const actions = document.createElement('div');
+    actions.className = 'shrink-0 flex items-center gap-2';
+
+    if (item.status === 'done' && item.jpegBlob) {
+      const dl = document.createElement('button');
+      dl.type = 'button';
+      dl.className = 'btn btn-ghost !py-1.5 !px-2.5';
+      dl.textContent = 'Save JPG';
+      dl.addEventListener('click', () => {
+        downloadBlob(item.jpegBlob!, `${stripExtension(item.file.name)}.jpg`);
+      });
+      actions.appendChild(dl);
+    }
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'w-8 h-8 inline-flex items-center justify-center border border-[var(--color-rule)] rounded-sm hover:bg-[var(--color-paper-2)]';
+    remove.setAttribute('aria-label', `Remove ${item.file.name}`);
+    remove.innerHTML = '<svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+    remove.disabled = item.status === 'converting';
+    remove.addEventListener('click', () => {
+      const idx = items.findIndex((i) => i.id === item.id);
+      if (idx >= 0) items.splice(idx, 1);
+      render();
+    });
+    actions.appendChild(remove);
+
+    li.appendChild(actions);
+    return li;
+  }
+
+  function addFiles(files: FileList | File[]) {
+    const arr = Array.from(files);
+    let accepted = 0;
+    let rejected = 0;
+    for (const f of arr) {
+      if (!isHeic(f)) { rejected++; continue; }
+      items.push({ id: crypto.randomUUID(), file: f, status: 'ready' });
+      accepted++;
+    }
+    if (accepted === 0 && rejected > 0) {
+      showErr('Only HEIC and HEIF files are accepted here.');
+    } else if (rejected > 0) {
+      showErr(`${rejected} file${rejected === 1 ? '' : 's'} skipped — not HEIC/HEIF.`);
+    }
+    render();
+  }
+
+  // --- Drop zone wiring ---
+  dropzone.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).id === 'browse') return;
+    input.click();
+  });
+  dropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+  });
+  browse.addEventListener('click', (e) => { e.stopPropagation(); input.click(); });
+  addMoreBtn.addEventListener('click', () => input.click());
+  clearBtn.addEventListener('click', () => {
+    if (working) return;
+    items.length = 0;
+    render();
+    setProgress(0, 'Idle');
+  });
+
+  ['dragenter', 'dragover'].forEach((evt) => dropzone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    dropzone.classList.add('is-dragging');
+    if (scan) scan.hidden = false;
+  }));
+  ['dragleave', 'drop'].forEach((evt) => dropzone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    if (evt === 'dragleave' && (e.target !== dropzone)) return;
+    dropzone.classList.remove('is-dragging');
+    if (scan) scan.hidden = true;
+  }));
+  dropzone.addEventListener('drop', (e) => {
+    if (!e.dataTransfer?.files) return;
+    addFiles(e.dataTransfer.files);
+  });
+  input.addEventListener('change', () => {
+    if (input.files) addFiles(input.files);
+    input.value = '';
+  });
+
+  // --- Quality slider ---
+  qSlider.addEventListener('input', () => { qVal.textContent = qSlider.value; });
+
+  // --- Conversion ---
+  convertBtn.addEventListener('click', async () => {
+    const toProcess = items.filter((i) => i.status === 'ready');
+    if (toProcess.length === 0) return;
+
+    working = true;
+    convertBtn.disabled = true;
+    const quality = Math.max(50, Math.min(100, +qSlider.value)) / 100;
+
+    setProgress(1, `Converting 1 of ${toProcess.length}`);
+
+    for (let i = 0; i < toProcess.length; i++) {
+      const item = toProcess[i];
+      item.status = 'converting';
+      render();
+      setProgress(((i) / toProcess.length) * 90 + 2, `Converting ${i + 1} of ${toProcess.length}`);
+
+      try {
+        const result = await heic2any({
+          blob: item.file,
+          toType: 'image/jpeg',
+          quality,
+        });
+        const blob: Blob = Array.isArray(result) ? result[0] : result;
+        item.jpegBlob = blob;
+        item.jpegSize = blob.size;
+        item.status   = 'done';
+      } catch (err) {
+        console.error(err);
+        item.status = 'error';
+        item.error  = (err as Error).message || 'could not decode';
+      }
+      render();
+    }
+
+    setProgress(94, 'Packaging');
+
+    const done = items.filter((i) => i.status === 'done' && i.jpegBlob);
+    if (done.length === 0) {
+      showErr('No files could be converted. They may not be valid HEIC images.');
+      setProgress(0, 'Idle');
+    } else if (done.length === 1) {
+      const item = done[0];
+      downloadBlob(item.jpegBlob!, `${stripExtension(item.file.name)}.jpg`);
+      setProgress(100, 'Done · 1 file');
+    } else {
+      const zip = new JSZip();
+      const names = new Set<string>();
+      for (const item of done) {
+        let name = `${stripExtension(item.file.name)}.jpg`;
+        // Dedupe names defensively: "IMG.jpg", "IMG (2).jpg", …
+        let n = 2;
+        while (names.has(name)) {
+          name = `${stripExtension(item.file.name)} (${n}).jpg`;
+          n++;
+        }
+        names.add(name);
+        zip.file(name, item.jpegBlob!);
+      }
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      downloadBlob(zipBlob, `dtmp-heic-to-jpg-${todayStamp()}.zip`);
+      setProgress(100, `Done · ${done.length} files`);
+    }
+
+    working = false;
+    setTimeout(() => setProgress(0, 'Idle'), 1800);
+    render();
+  });
+</script>

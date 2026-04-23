@@ -1,0 +1,139 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ToolHeader from '../components/ToolHeader.astro';
+import HeicToJpgTool from '../components/tools/HeicToJpgTool.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Faq from '../components/Faq.astro';
+import RelatedTools from '../components/RelatedTools.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { SITE_NAME, SITE_URL } from '../lib/constants';
+
+const title = 'Convert HEIC to JPG — free, in your browser, nothing uploads · ' + SITE_NAME;
+const description = "Convert iPhone HEIC photos to standard JPG without uploading them anywhere. Runs entirely in your browser — your pictures never leave your device. Free, batch-friendly, no sign-up, no watermarks.";
+
+const steps = [
+  { title: 'Drop the HEIC files', body: "Add one photo or a whole camera roll. Your browser holds them in memory — no upload, no queue on some stranger's server." },
+  { title: 'Your browser does the work', body: "libheif decodes the HEIC; a canvas re-encodes it as a standard JPG at your chosen quality. Runs entirely in this tab." },
+  { title: 'Grab the result', body: 'Single file? Direct download. Batch? You get a tidy zip. Either way, EXIF is stripped by default.' },
+];
+
+const faq = [
+  { q: 'Why is HEIC such a pain in the first place?', a: "HEIC (or HEIF) is Apple's default format for photos taken on iPhones since iOS 11. It produces smaller files at better quality than JPG — which is great inside Apple's ecosystem and a nightmare everywhere else. Windows, most websites, older messaging apps and pre-2022 Android builds don't know what to do with it. So you end up converting." },
+  { q: 'Does this really run in my browser?', a: "Yes. The conversion uses <a href='https://github.com/strukturag/libheif' target='_blank' rel='noopener noreferrer' class='underline decoration-[var(--color-emerald-dk)] decoration-2 underline-offset-4'>libheif</a> compiled to WebAssembly. All the work happens in this tab — you can open your browser's network panel while you convert and watch nothing upload. The only requests going out are for the page's own static assets." },
+  { q: 'What about EXIF metadata (location, camera, timestamp)?', a: "EXIF is <strong>stripped</strong> by default when converting to JPG. That means the JPG has no GPS coordinates, no camera model, no capture time. This is usually what you want if you're about to share the photo. Future options will let you keep camera/time metadata and strip only location, or preserve everything." },
+  { q: 'Does it work on iPhone?', a: "Yes — Safari on iOS handles libheif WASM fine. You can even convert HEIC photos directly on the phone that took them, then AirDrop or save the JPG." },
+  { q: 'How many photos can I convert at once?', a: "As many as your browser's RAM can hold. Desktop browsers will happily chew through a few hundred photos; on mobile, stick to 30–50 at a time if they're high-resolution iPhone shots. If the tab goes sluggish, work in smaller batches." },
+  { q: 'What JPEG quality should I pick?', a: "92% is a sensible default — effectively lossless to the eye, while keeping files reasonably small. Drop to 80% if you need every megabyte back (web uploads, email attachments). Push to 100% if you're archiving and storage isn't a concern." },
+  { q: 'Is anything sent to a server?', a: "No. The whole site is a static bundle served from a CDN — there is no backend to receive files. You can check the source on <a href='https://github.com/NickPax/donttouchmypic' target='_blank' rel='noopener noreferrer' class='underline decoration-[var(--color-emerald-dk)] decoration-2 underline-offset-4'>GitHub</a> if you want to verify that for yourself." },
+];
+
+const sd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: `${SITE_NAME} HEIC to JPG`,
+    url: `${SITE_URL}/heic-to-jpg`,
+    applicationCategory: 'Utilities',
+    operatingSystem: 'Any (browser-based)',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a.replace(/<[^>]+>/g, '') },
+    })),
+  },
+];
+---
+<BaseLayout title={title} description={description} path="/heic-to-jpg" structuredData={sd}>
+  <ToolHeader
+    kicker="Tool · 01"
+    title="HEIC → JPG"
+    tagline="Make iPhone photos open on anything."
+    description="Drop HEIC or HEIF files, pick a JPEG quality, download the JPGs. Every step happens in this tab — your photos never touch a server, because there isn't one."
+    accent="emerald"
+  >
+    <svg slot="icon" viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="7" height="11" rx="1"/><rect x="14" y="8" width="7" height="11" rx="1"/><path d="M10 12h4"/><path d="M13 9l2 3-2 3"/></svg>
+  </ToolHeader>
+
+  <HeicToJpgTool />
+
+  <!-- When you'd want this -->
+  <section class="mx-auto max-w-[1320px] px-5 sm:px-8 py-20 border-t border-[var(--color-rule)]">
+    <div class="grid md:grid-cols-[320px_1fr] gap-10 items-start">
+      <div class="md:sticky md:top-28 self-start">
+        <div class="section-num">§01b · Use cases</div>
+        <h2 class="mt-2 display-2">When you'd want this.</h2>
+        <p class="mt-4 text-sm text-[color-mix(in_srgb,var(--color-ink)_80%,transparent)] max-w-xs">
+          Whenever an iPhone photo refuses to cooperate with <em class="font-display not-italic">something that isn't made by Apple</em>.
+        </p>
+      </div>
+
+      <ul class="grid sm:grid-cols-2 gap-4">
+        {[
+          {
+            t: 'Sending photos to Windows users',
+            b: "Windows still won't open HEIC without a paid codec extension. Send a JPG and it just works — no install, no questions.",
+            k: 'Windows · instant open',
+            icon: '<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 12h18"/>',
+          },
+          {
+            t: 'Uploading to a website or form',
+            b: 'Passport applications, job portals, university sites, marketplaces — most file inputs accept JPG and PNG, and quietly reject HEIC.',
+            k: 'Uploads · accepted',
+            icon: '<path d="M12 4v12M6 10l6-6 6 6"/><path d="M4 18h16"/>',
+          },
+          {
+            t: 'Messaging across platforms',
+            b: 'WhatsApp, Telegram and most chat apps handle HEIC now, but older Android builds, Signal on certain devices, and email clients still choke.',
+            k: 'Chat · universal',
+            icon: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
+          },
+          {
+            t: 'Editing in older software',
+            b: 'Photoshop CC before 2020, Lightroom without the HEIF plug-in, GIMP, and most lightweight editors. JPG saves the compatibility dance.',
+            k: 'Editors · plug-free',
+            icon: '<path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>',
+          },
+          {
+            t: 'Printing at a kiosk or lab',
+            b: "High-street print shops and drugstore kiosks almost universally want JPG. A USB stick full of HEICs is a 20-minute panic before someone's birthday dinner.",
+            k: 'Print · supported',
+            icon: '<path d="M6 9V2h12v7"/><rect x="6" y="14" width="12" height="8"/><path d="M6 18H2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5h-4"/>',
+          },
+          {
+            t: 'Feeding AI / image tools',
+            b: 'Most image pipelines — ML models, ebook compilers, generative art tools, slide decks, resume builders — expect JPG or PNG. HEIC is the odd one out.',
+            k: 'Pipelines · compatible',
+            icon: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+          },
+        ].map((u) => (
+          <li class="card p-6 flex flex-col min-h-[200px]">
+            <div class="flex items-center justify-between">
+              <span class="w-10 h-10 inline-flex items-center justify-center rounded-sm bg-[var(--color-emerald-lt)] text-[var(--color-emerald-dk)]">
+                <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" set:html={u.icon}></svg>
+              </span>
+              <span class="font-mono text-[10px] tracking-[0.18em] uppercase text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]">{u.k}</span>
+            </div>
+            <h3 class="mt-6 font-display text-[24px] leading-tight">{u.t}.</h3>
+            <p class="mt-2 text-[14.5px] leading-relaxed text-[color-mix(in_srgb,var(--color-ink)_82%,transparent)]">{u.b}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <p class="mt-10 pt-6 rule font-mono text-[12px] tracking-[0.12em] uppercase text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]">
+      If you're staying inside the Apple ecosystem — Photos, Messages, Keynote, AirDrop — you don't need to convert. HEIC is better there.
+    </p>
+  </section>
+
+  <AdSlot position="heic-under-tool" size="970x250" />
+  <HowItWorks steps={steps} heading="How the conversion happens" />
+  <Faq items={faq} heading="HEIC → JPG · FAQ" />
+  <AdSlot position="heic-faq-bottom" size="728x90" />
+  <RelatedTools current="heic-to-jpg" />
+</BaseLayout>

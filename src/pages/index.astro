@@ -1,0 +1,63 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Hero from '../components/Hero.astro';
+import ToolGrid from '../components/ToolGrid.astro';
+import TrustSection from '../components/TrustSection.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Faq from '../components/Faq.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { SITE_NAME, SITE_URL } from '../lib/constants';
+
+const title = `${SITE_NAME} — Private image tools. Nothing uploads.`;
+const description = 'Free image tools that run entirely in your browser. Convert HEIC to JPG, resize, compress and crop photos — your pictures never leave your device. No sign-up, no watermarks, no limits.';
+
+const steps = [
+  { title: 'Pick a photo', body: 'Drag an image onto a tool, or browse from your device. Nothing is sent anywhere — the tool lives inside this tab.' },
+  { title: 'Your browser does the work', body: "libheif, Canvas and some JavaScript do the heavy lifting right here in your tab. Nothing gets sent anywhere, because there's nowhere for it to go — we don't run a server." },
+  { title: 'Download the result', body: 'You get a fresh file to save. Close the tab and every trace of what you did evaporates with it.' },
+];
+
+const faq = [
+  { q: "So you really can't see my photos?", a: "Correct. The tool code runs entirely inside your browser. There is no endpoint to upload to and no server-side processing step — the site is a static bundle served from a CDN. You can verify it by opening your browser's network tab while you use a tool: the only requests you'll see are for the page's own assets." },
+  { q: 'Does it work on iPhone?', a: "Yes — especially for HEIC. Apple's native HEIC format is the main reason most iPhone photos refuse to open on Windows or in older apps. Our HEIC → JPG tool decodes them locally in Safari or any other mobile browser. No app install, no upload." },
+  { q: 'What happens to EXIF data (location, camera, timestamp)?', a: "For the HEIC → JPG tool, EXIF is not preserved by default — the converted JPG comes out clean, which is usually what you want if you're sharing the photo. Future tools will make this optional so you can keep camera/time metadata but strip location, or keep everything." },
+  { q: 'Is there a file-size limit?', a: "Technically, no. Practically, your browser's RAM is the ceiling. Most modern browsers handle a few dozen high-res photos at once before getting sluggish. For very large batches, work in smaller chunks." },
+  { q: 'Why is it free?', a: "Because a flat HTML/JS bundle on a CDN costs us almost nothing to serve, and we plan to show a couple of unobtrusive ads around the content. No paywall, no freemium trap." },
+  { q: 'When will the other tools launch?', a: "HEIC → JPG is live now. Convert, Compress, Resize, Crop and Rotate are in active development — each one ships when it works properly, not before. Check back, or follow the <a href=\"https://github.com/NickPax/donttouchmypic\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"underline decoration-[var(--color-emerald-dk)] decoration-2 underline-offset-4\">GitHub repo</a> to watch progress." },
+];
+
+const sd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: SITE_NAME,
+    url: `${SITE_URL}/`,
+    description,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: SITE_NAME,
+    url: `${SITE_URL}/`,
+    slogan: 'Your pics. Your phone. No exceptions.',
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a.replace(/<[^>]+>/g, '') },
+    })),
+  },
+];
+---
+<BaseLayout title={title} description={description} path="/" structuredData={sd}>
+  <Hero />
+  <ToolGrid />
+  <AdSlot position="home-mid" size="728x90" />
+  <TrustSection />
+  <HowItWorks steps={steps} heading="Three steps" />
+  <Faq items={faq} heading="FAQ" />
+  <AdSlot position="home-faq-bottom" size="728x90" />
+</BaseLayout>

@@ -1,0 +1,130 @@
+---
+import { GITHUB_REPO } from '../lib/constants';
+
+const tools = [
+  { href: '/heic-to-jpg', label: 'HEIC → JPG' },
+];
+---
+<section class="relative overflow-hidden border-b border-[var(--color-rule)]">
+  <!-- Dotted field, fades out at bottom -->
+  <div class="absolute inset-0 dotfield opacity-60 [mask-image:linear-gradient(to_bottom,black_60%,transparent)]" aria-hidden="true"></div>
+
+  <!-- Giant ghost-watermark in the corner — contained to the section so it can't
+       leak past the right edge on mobile. -->
+  <div aria-hidden="true" class="pointer-events-none absolute -top-14 right-[-40px] md:right-[-10px] font-display text-[260px] md:text-[420px] leading-none text-[color-mix(in_srgb,var(--color-navy)_9%,transparent)] select-none">
+    JPG.
+  </div>
+
+  <div class="relative mx-auto max-w-[1320px] px-5 sm:px-8 pt-14 md:pt-24 pb-20">
+    <div class="grid lg:grid-cols-[minmax(0,1fr)_420px] gap-12 items-end">
+      <div>
+        <div class="flex flex-wrap items-center gap-2 rise">
+          <span class="font-mono text-[11px] tracking-[0.2em] uppercase text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">
+            §01 · Bulletin
+          </span>
+          <span class="h-px w-8 bg-[var(--color-rule)]"></span>
+          <span class="font-mono text-[11px] tracking-[0.18em] uppercase text-[var(--color-emerald-dk)]">
+            100% client-side
+          </span>
+        </div>
+
+        <h1 class="mt-5 rise rise-d1">
+          <span class="display-1 block">Don't&nbsp;touch</span>
+          <span class="display-1 block">my <span class="relative inline-block">pic
+            <span aria-hidden="true" class="absolute -right-5 -top-2 font-mono text-[20px] not-italic text-[var(--color-emerald-dk)]">.</span>
+          </span></span>
+        </h1>
+
+        <p class="mt-8 max-w-xl text-[17px] leading-relaxed text-[color-mix(in_srgb,var(--color-ink)_85%,transparent)] rise rise-d2">
+          Your pics. Your phone. No exceptions. Free image tools that
+          <span class="font-medium text-[var(--color-ink)]">never upload your photos</span> — convert HEIC, resize, compress and crop
+          entirely inside your browser, while the rest of the internet
+          helps itself to your camera roll.
+        </p>
+
+        <div class="mt-9 flex flex-wrap items-center gap-3 rise rise-d3">
+          <a href="/heic-to-jpg" class="btn btn-primary">
+            Convert HEIC
+            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer" class="btn btn-ghost">
+            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.8.1-.8.1-.8 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.3 3.6 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.3-3.1-.1-.3-.5-1.6.1-3.3 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.2 18 4.5 18 4.5c.6 1.7.2 3 .1 3.3.8.8 1.3 1.9 1.3 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5z"/></svg>
+            Read the code
+          </a>
+          <div class="flex items-center gap-2 font-mono text-[12px] text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">
+            <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-emerald-dk)] pulse-ring"></span>
+            <span>no sign-up · no watermarks · no limits</span>
+          </div>
+        </div>
+
+        <div class="mt-14 grid grid-cols-3 max-w-md rise rise-d4">
+          {[
+            ['0', 'photos uploaded'],
+            ['0', 'accounts required'],
+            ['∞', 'pics processed'],
+          ].map(([n, l]) => (
+            <div class="border-l border-[var(--color-rule)] first:border-l-0 pl-4">
+              <div class="font-display text-[44px] leading-none text-[var(--color-navy)]">{n}</div>
+              <div class="mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <!-- Photo motif — a faux Polaroid with "Do Not Upload" stamp -->
+      <aside class="relative rise rise-d3">
+        <div class="paper-shadow rounded-sm bg-[var(--color-cream)] border border-[var(--color-rule)] p-5 pr-6 -rotate-[1.2deg]">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-[10px] uppercase tracking-[0.22em] text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]">IMG · 0042</span>
+            <span class="stamp stamp-red stamp-in">Do Not Upload</span>
+          </div>
+
+          <!-- Abstract "photo" — warm horizon with sun -->
+          <div class="mt-4 relative h-[180px] rounded-sm overflow-hidden border border-[color-mix(in_srgb,var(--color-ink)_10%,transparent)]">
+            <!-- Sky gradient -->
+            <div class="absolute inset-0" style="background: linear-gradient(to bottom, #f4a65a 0%, #e87a4a 55%, #b4472a 75%, #2d4a6e 75%, #14283f 100%);"></div>
+            <!-- Sun -->
+            <div class="absolute left-1/2 -translate-x-1/2 bottom-[42%] w-14 h-14 rounded-full" style="background: radial-gradient(circle, #fde2a7 0%, #fde2a7 60%, rgba(253,226,167,0) 100%);"></div>
+            <!-- Horizon line -->
+            <div class="absolute left-0 right-0 bottom-[25%] h-px" style="background: color-mix(in srgb, #14283f 60%, transparent);"></div>
+            <!-- Sun reflection on water -->
+            <div class="absolute left-1/2 -translate-x-1/2 bottom-3 w-8 h-6 opacity-50" style="background: linear-gradient(to bottom, #fde2a7, transparent); filter: blur(3px);"></div>
+          </div>
+
+          <div class="mt-4">
+            <div class="font-display text-[24px] leading-tight">Holiday · July.</div>
+            <div class="mt-1 text-xs font-mono text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">HEIC · 4032×3024 · 3.4 MB</div>
+          </div>
+          <div class="mt-4 flex items-center justify-between font-mono text-[10px] tracking-[0.16em] uppercase text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">
+            <span>processed · locally</span>
+            <span>0 MB uploaded</span>
+          </div>
+        </div>
+
+        <!-- Server connection, with a red slash -->
+        <div class="absolute -bottom-8 -left-8 w-44 h-28 card paper-shadow p-3 rotate-[3deg] hidden sm:block">
+          <div class="flex items-center justify-between font-mono text-[10px] tracking-[0.14em] uppercase">
+            <span>/upload</span>
+            <span class="text-[var(--color-red-stamp)]">disabled</span>
+          </div>
+          <div class="mt-3 relative h-10 bg-[var(--color-paper-2)] rounded-sm flex items-center justify-center">
+            <svg viewBox="0 0 24 24" class="w-5 h-5 text-[var(--color-ink)]" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M7 10l5-5 5 5M12 5v12"/></svg>
+            <span class="absolute left-2 right-2 top-1/2 h-[2px] bg-[var(--color-red-stamp)] -rotate-6"></span>
+          </div>
+          <div class="mt-3 font-mono text-[10px] text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">no endpoint available</div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Quick tool links underneath hero.
+         Only lists live tools — the full grid below covers coming-soon ones. -->
+    <div class="mt-16 rise rise-d5 flex flex-wrap items-center gap-x-10 gap-y-3 border-t border-[var(--color-rule)] pt-6">
+      <span class="font-mono text-[11px] tracking-[0.18em] uppercase text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Live now:</span>
+      {tools.map((t) => (
+        <a href={t.href} class="group font-display text-[28px] md:text-[34px] leading-none underline-offset-[6px] decoration-[3px] decoration-transparent hover:decoration-[var(--color-emerald-dk)] underline transition-colors">
+          {t.label}<span class="text-[var(--color-emerald-dk)]">.</span>
+        </a>
+      ))}
+    </div>
+  </div>
+</section>

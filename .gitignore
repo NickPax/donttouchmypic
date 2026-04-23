@@ -1,0 +1,32 @@
+# build output
+dist/
+.astro/
+
+# deps
+node_modules/
+
+# env
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/
+.idea/
+
+# cloudflare
+.wrangler/
+
+# claude code — local tool-permission prefs, not project content
+.claude/
+
+# misc
+.pnpm-debug.log

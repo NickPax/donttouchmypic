@@ -1,0 +1,100 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { SITE_NAME, SITE_URL } from '../lib/constants';
+
+type Props = {
+  title: string;
+  description: string;
+  path?: string;
+  ogImage?: string;
+  structuredData?: Record<string, unknown> | Array<Record<string, unknown>>;
+  noIndex?: boolean;
+};
+
+const {
+  title,
+  description,
+  path = '',
+  ogImage = '/og.png',
+  structuredData,
+  noIndex = false,
+} = Astro.props;
+
+const canonical = new URL(path, Astro.site ?? SITE_URL).toString();
+const ogUrl = new URL(ogImage, Astro.site ?? SITE_URL).toString();
+
+const sd = structuredData
+  ? Array.isArray(structuredData)
+    ? structuredData
+    : [structuredData]
+  : [];
+
+const adsLive = import.meta.env.PUBLIC_ADS_ENABLED === 'true';
+const adsenseClient = import.meta.env.PUBLIC_ADSENSE_CLIENT as string | undefined;
+const showAdsenseLoader = adsLive && !!adsenseClient;
+
+const cfAnalyticsToken = import.meta.env.PUBLIC_CF_ANALYTICS_TOKEN as string | undefined;
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f6f1e7" />
+
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  <link rel="canonical" href={canonical} />
+  {noIndex && <meta name="robots" content="noindex,nofollow" />}
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content={SITE_NAME} />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:url" content={canonical} />
+  <meta property="og:image" content={ogUrl} />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={title} />
+  <meta name="twitter:description" content={description} />
+  <meta name="twitter:image" content={ogUrl} />
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+
+  {sd.map((obj) => (
+    <script type="application/ld+json" set:html={JSON.stringify(obj)} />
+  ))}
+
+  {showAdsenseLoader && (
+    <script
+      is:inline
+      async
+      crossorigin="anonymous"
+      src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClient}`}
+    ></script>
+  )}
+
+  {cfAnalyticsToken && (
+    <script
+      is:inline
+      defer
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon={`{"token": "${cfAnalyticsToken}"}`}
+    ></script>
+  )}
+</head>
+<body>
+  <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:bg-[var(--color-navy)] focus:text-[var(--color-paper)] focus:px-3 focus:py-2 focus:rounded-sm">
+    Skip to content
+  </a>
+  <Header />
+  <main id="main" class="relative">
+    <slot />
+  </main>
+  <Footer />
+</body>
+</html>
