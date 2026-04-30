@@ -12,4 +12,5 @@ export const GITHUB_REPO = 'https://github.com/NickPax/donttouchmypic';
 
 export const SIBLING_SITES = [
   { name: 'DontTouchMyDoc', url: 'https://donttouchmydoc.com', blurb: 'PDF tools that never upload.' },
+  { name: 'DontTouchMyVid', url: 'https://donttouchmyvid.com', blurb: 'Video tools that never upload.' },
 ] as const;
