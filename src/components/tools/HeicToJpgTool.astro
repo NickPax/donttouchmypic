@@ -80,12 +80,28 @@ import AdSlot from '../AdSlot.astro';
 
           <!-- Action bar -->
           <div class="mt-6 flex flex-wrap items-center justify-between gap-4 rule pt-5">
-            <div class="flex-1 min-w-[240px]">
+            <div class="w-full min-w-0 sm:flex-1">
               <div class="flex items-center justify-between mb-1.5 font-mono text-[11px] tracking-[0.12em] uppercase text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">
                 <span id="status-label">Idle</span>
                 <span id="progress-num">0%</span>
               </div>
               <div class="bar"><span id="progress-bar" style="width:0%"></span></div>
+              <!-- Source vs Output, mirroring the DontTouchMyVid action bar.
+                   Source is the running total of the queued HEIC sizes;
+                   Output is "—" until conversion finishes, then flips to
+                   the total JPG output size. The percent saved sits below. -->
+              <div class="mt-3 grid grid-cols-[1fr_auto_1fr] gap-2 sm:gap-4 items-center">
+                <div class="min-w-0">
+                  <div class="kicker text-[10px]">Source</div>
+                  <div class="font-display text-[22px] sm:text-[26px] leading-none mt-0.5 truncate" id="in-stat">—</div>
+                </div>
+                <span class="font-mono text-[16px] text-[color-mix(in_srgb,var(--color-ink)_55%,transparent)]" aria-hidden="true">→</span>
+                <div class="min-w-0">
+                  <div class="kicker text-[10px]">Output</div>
+                  <div class="font-display text-[22px] sm:text-[26px] leading-none mt-0.5 truncate" id="out-stat">—</div>
+                </div>
+              </div>
+              <div class="mt-1 text-[11px] font-mono text-[var(--color-emerald-dk)] hidden" id="saved-line"></div>
             </div>
             <button id="convert-btn" class="btn btn-primary" disabled>
               Convert &amp; download
@@ -153,6 +169,9 @@ import AdSlot from '../AdSlot.astro';
   const progBar     = document.getElementById('progress-bar') as HTMLSpanElement;
   const progNum     = document.getElementById('progress-num') as HTMLSpanElement;
   const statusLabel = document.getElementById('status-label') as HTMLSpanElement;
+  const inStat      = document.getElementById('in-stat') as HTMLDivElement;
+  const outStat     = document.getElementById('out-stat') as HTMLDivElement;
+  const savedLine   = document.getElementById('saved-line') as HTMLDivElement;
   const errEl       = document.getElementById('err') as HTMLDivElement;
   const scan        = dropzone.querySelector('[data-scanline]') as HTMLDivElement;
 
@@ -220,8 +239,32 @@ import AdSlot from '../AdSlot.astro';
     panel.classList.remove('hidden');
 
     const totalSize = items.reduce((acc, it) => acc + it.file.size, 0);
+    const totalOut  = items.reduce((acc, it) => acc + (it.jpegSize ?? 0), 0);
     chipCount.textContent = `${items.length} file${items.length === 1 ? '' : 's'}`;
     chipSize.textContent  = formatBytes(totalSize);
+
+    // Source/Output pair in the action bar — Source is always the running
+    // total of the queued HEICs; Output stays at "—" until at least one
+    // file is converted, then shows the cumulative JPG size and the
+    // saved-line lights up underneath in emerald.
+    inStat.textContent  = formatBytes(totalSize);
+    const doneCount = items.filter((i) => i.status === 'done').length;
+    if (doneCount > 0 && totalOut > 0) {
+      outStat.textContent = formatBytes(totalOut);
+      const doneInputBytes = items
+        .filter((i) => i.status === 'done')
+        .reduce((acc, it) => acc + it.file.size, 0);
+      if (doneInputBytes > totalOut) {
+        const pct = Math.round((1 - totalOut / doneInputBytes) * 100);
+        savedLine.textContent = `Saved ${pct}% across ${doneCount} file${doneCount === 1 ? '' : 's'}`;
+        savedLine.classList.remove('hidden');
+      } else {
+        savedLine.classList.add('hidden');
+      }
+    } else {
+      outStat.textContent = '—';
+      savedLine.classList.add('hidden');
+    }
 
     listEl.innerHTML = '';
     for (const item of items) {
