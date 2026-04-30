@@ -38,7 +38,7 @@ import AdSlot from '../AdSlot.astro';
             HEIC &amp; HEIF · as many as your browser can hold.
           </p>
         </div>
-        <input id="file-input" type="file" accept="image/*,.heic,.heif" multiple class="sr-only" />
+        <input id="file-input" type="file" accept=".heic,.heif,image/heic,image/heif" multiple class="sr-only" />
       </div>
 
       <!-- File panel -->
@@ -195,6 +195,9 @@ import AdSlot from '../AdSlot.astro';
   if (IS_IOS) {
     const note = document.getElementById('ios-note');
     if (note) note.removeAttribute('hidden');
+    // iOS needs image/* to surface the Photos library; on macOS the same
+    // value makes Chrome hide HEIC files, so we only widen on iOS.
+    input.setAttribute('accept', 'image/*,.heic,.heif');
   }
 
   function render() {
