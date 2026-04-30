@@ -115,7 +115,11 @@ the "no uploads" promise. If a new tool needs an external fetch, the change
 is significant: tell the user, and update the CSP at the same time.
 
 Current allow-lists:
-- script-src: `'self' 'unsafe-inline' https://static.cloudflareinsights.com`
+- script-src: `'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval' https://static.cloudflareinsights.com`
+  (`wasm-unsafe-eval` for libheif's WebAssembly compile/instantiate;
+  `unsafe-eval` for the Emscripten glue code's `new Function(...)` use
+  inside the libheif worker. Neither weakens the no-upload guarantee —
+  that's enforced by `connect-src`.)
 - style-src: `'self' 'unsafe-inline'`
 - img-src: `'self' data: blob:` (blob URLs are how we hand the user the
   converted JPG — don't tighten this)
