@@ -8,6 +8,17 @@ import AdSlot from '../AdSlot.astro';
 <section id="tool" class="mx-auto max-w-[1320px] px-5 sm:px-8 pt-10 pb-16">
   <div class="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8">
     <div>
+      <!-- iOS heads-up: revealed by inline script when on iPhone/iPad -->
+      <div id="ios-note" hidden class="mb-5 card p-4 flex items-start gap-3">
+        <span class="shrink-0 mt-0.5 inline-flex w-6 h-6 items-center justify-center rounded-sm bg-[var(--color-emerald-lt)] text-[var(--color-emerald-dk)] font-mono text-[11px] font-bold">i</span>
+        <div class="min-w-0 text-sm leading-relaxed">
+          <div class="font-display text-[17px] leading-tight">On iPhone? Photos already arrive as JPG.</div>
+          <p class="mt-1 text-[color-mix(in_srgb,var(--color-ink)_75%,transparent)]">
+            Safari converts HEIC to JPEG when you upload from the Photos app — so picking a photo here usually skips the conversion you'd want. To keep originals, open the <strong class="font-semibold">Files</strong> app and share from there, or set <strong class="font-semibold">Settings → Photos → Transfer to Mac or PC → Keep Originals</strong>. This tool is most useful on a desktop where a <code>.heic</code> file already lives.
+          </p>
+        </div>
+      </div>
+
       <!-- Drop zone -->
       <div
         id="dropzone"
@@ -27,7 +38,7 @@ import AdSlot from '../AdSlot.astro';
             HEIC &amp; HEIF · as many as your browser can hold.
           </p>
         </div>
-        <input id="file-input" type="file" accept=".heic,.heif,image/heic,image/heif" multiple class="sr-only" />
+        <input id="file-input" type="file" accept="image/*,.heic,.heif" multiple class="sr-only" />
       </div>
 
       <!-- File panel -->
@@ -137,10 +148,12 @@ import AdSlot from '../AdSlot.astro';
   const items: Item[] = [];
   let working = false;
 
-  function showErr(msg: string) {
+  let errTimer: ReturnType<typeof setTimeout> | undefined;
+  function showErr(msg: string, persist = false) {
+    if (errTimer) { clearTimeout(errTimer); errTimer = undefined; }
     errEl.textContent = msg;
     errEl.classList.remove('hidden');
-    setTimeout(() => errEl.classList.add('hidden'), 6000);
+    if (!persist) errTimer = setTimeout(() => errEl.classList.add('hidden'), 6000);
   }
   function setProgress(pct: number, label?: string) {
     const c = Math.max(0, Math.min(100, pct));
@@ -148,11 +161,40 @@ import AdSlot from '../AdSlot.astro';
     progNum.textContent = `${Math.round(c)}%`;
     if (label) statusLabel.textContent = label;
   }
-  function isHeic(f: File): boolean {
+  const HEIC_BRANDS = new Set([
+    'heic','heix','heim','heis',
+    'mif1','msf1',
+    'hevc','hevx','hevm','hevs',
+  ]);
+
+  function isHeicByMeta(f: File): boolean {
     const name = f.name.toLowerCase();
     if (name.endsWith('.heic') || name.endsWith('.heif')) return true;
     const t = (f.type || '').toLowerCase();
     return t === 'image/heic' || t === 'image/heif';
+  }
+
+  // ISO BMFF: bytes 4..8 spell 'ftyp', 8..12 are the major brand.
+  async function isHeicByMagic(f: File): Promise<boolean> {
+    try {
+      const buf = await f.slice(0, 32).arrayBuffer();
+      const b = new Uint8Array(buf);
+      if (b.length < 12) return false;
+      const ftyp = String.fromCharCode(b[4], b[5], b[6], b[7]);
+      if (ftyp !== 'ftyp') return false;
+      const brand = String.fromCharCode(b[8], b[9], b[10], b[11]);
+      return HEIC_BRANDS.has(brand);
+    } catch {
+      return false;
+    }
+  }
+
+  const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
+
+  if (IS_IOS) {
+    const note = document.getElementById('ios-note');
+    if (note) note.removeAttribute('hidden');
   }
 
   function render() {
@@ -234,17 +276,29 @@ import AdSlot from '../AdSlot.astro';
     return li;
   }
 
-  function addFiles(files: FileList | File[]) {
+  async function addFiles(files: FileList | File[]) {
     const arr = Array.from(files);
     let accepted = 0;
     let rejected = 0;
+    let iosConverted = 0;
     for (const f of arr) {
-      if (!isHeic(f)) { rejected++; continue; }
-      items.push({ id: crypto.randomUUID(), file: f, status: 'ready' });
-      accepted++;
+      let ok = isHeicByMeta(f);
+      if (!ok) ok = await isHeicByMagic(f);
+      if (ok) {
+        items.push({ id: crypto.randomUUID(), file: f, status: 'ready' });
+        accepted++;
+        continue;
+      }
+      rejected++;
+      const t = (f.type || '').toLowerCase();
+      if (IS_IOS && (t === 'image/jpeg' || t === 'image/png')) iosConverted++;
     }
     if (accepted === 0 && rejected > 0) {
-      showErr('Only HEIC and HEIF files are accepted here.');
+      if (iosConverted > 0) {
+        showErr('iPhone converted that to JPG before upload — it\'s already what this tool would output. To keep the original HEIC, share via the Files app, or set Settings → Photos → Transfer to "Keep Originals".', true);
+      } else {
+        showErr('Only HEIC and HEIF files are accepted here.');
+      }
     } else if (rejected > 0) {
       showErr(`${rejected} file${rejected === 1 ? '' : 's'} skipped — not HEIC/HEIF.`);
     }
