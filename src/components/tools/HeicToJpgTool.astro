@@ -132,6 +132,10 @@ import AdSlot from '../AdSlot.astro';
     jpegBlob?: Blob;
     jpegSize?: number;
     error?: string;
+    // Lazy-allocated object URL pointing at jpegBlob, used as the thumbnail
+    // src once the file is converted. Revoked when the item is removed or
+    // the list is cleared so the blob can be garbage-collected.
+    previewUrl?: string;
   };
 
   const dropzone    = document.getElementById('dropzone') as HTMLDivElement;
@@ -233,8 +237,19 @@ import AdSlot from '../AdSlot.astro';
     li.className = 'py-3 flex items-center gap-3 min-w-0';
 
     const badge = document.createElement('span');
-    badge.className = 'shrink-0 w-10 h-12 border border-[var(--color-rule)] rounded-sm flex items-center justify-center font-mono text-[10px] tracking-[0.1em] bg-[var(--color-paper)]';
-    badge.textContent = 'HEIC';
+    badge.className = 'shrink-0 w-10 h-12 border border-[var(--color-rule)] rounded-sm overflow-hidden flex items-center justify-center font-mono text-[10px] tracking-[0.1em] bg-[var(--color-paper)]';
+    if (item.status === 'done' && item.jpegBlob) {
+      if (!item.previewUrl) item.previewUrl = URL.createObjectURL(item.jpegBlob);
+      const img = document.createElement('img');
+      img.src = item.previewUrl;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.className = 'w-full h-full object-cover';
+      badge.appendChild(img);
+    } else {
+      badge.textContent = 'HEIC';
+    }
     li.appendChild(badge);
 
     const body = document.createElement('div');
@@ -278,7 +293,10 @@ import AdSlot from '../AdSlot.astro';
     remove.disabled = item.status === 'converting';
     remove.addEventListener('click', () => {
       const idx = items.findIndex((i) => i.id === item.id);
-      if (idx >= 0) items.splice(idx, 1);
+      if (idx >= 0) {
+        if (items[idx].previewUrl) URL.revokeObjectURL(items[idx].previewUrl!);
+        items.splice(idx, 1);
+      }
       render();
     });
     actions.appendChild(remove);
@@ -328,6 +346,9 @@ import AdSlot from '../AdSlot.astro';
   addMoreBtn.addEventListener('click', () => input.click());
   clearBtn.addEventListener('click', () => {
     if (working) return;
+    for (const item of items) {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    }
     items.length = 0;
     render();
     setProgress(0, 'Idle');
