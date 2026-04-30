@@ -38,7 +38,14 @@ import AdSlot from '../AdSlot.astro';
             HEIC &amp; HEIF · as many as your browser can hold.
           </p>
         </div>
-        <input id="file-input" type="file" accept=".heic,.heif" multiple class="sr-only" />
+        <!-- No HTML-side accept filter. Different desktop browsers / OS
+             versions handle HEIC in the file picker inconsistently (Chrome
+             on macOS over-filters even extension-only accept; some Safari
+             versions misinterpret the .heic extension UTI). Letting the
+             picker show all files and validating via JS magic-byte sniff
+             on selection is bulletproof across browsers. The iOS branch
+             below sets accept at runtime to surface the Photos library. -->
+        <input id="file-input" type="file" multiple class="sr-only" />
       </div>
 
       <!-- File panel -->
@@ -192,20 +199,13 @@ import AdSlot from '../AdSlot.astro';
   const UA = navigator.userAgent;
   const IS_IOS = /iPad|iPhone|iPod/.test(UA)
     || (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
-  const IS_MAC_DESKTOP = /Macintosh/.test(UA) && !IS_IOS;
-  const IS_CHROMIUM = /Chrome/.test(UA) && !/Edg\//.test(UA) && !/OPR\//.test(UA);
 
   if (IS_IOS) {
     const note = document.getElementById('ios-note');
     if (note) note.removeAttribute('hidden');
-    // iOS needs image/* to surface the Photos library; on macOS the same
-    // value makes Chrome hide HEIC files, so we only widen on iOS.
+    // iOS only: set accept to surface the Photos library. Desktop
+    // intentionally has no accept filter — see the input's HTML comment.
     input.setAttribute('accept', 'image/*,.heic,.heif');
-  } else if (IS_MAC_DESKTOP && IS_CHROMIUM) {
-    // Chrome / Chromium on macOS over-filters HEIC out of the open panel
-    // even with extension-only accept (Safari is fine). Drop the filter
-    // here and let our JS magic-byte sniff handle validation.
-    input.removeAttribute('accept');
   }
 
   function render() {
