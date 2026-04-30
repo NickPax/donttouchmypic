@@ -317,17 +317,6 @@ import AdSlot from '../AdSlot.astro';
     const actions = document.createElement('div');
     actions.className = 'shrink-0 flex items-center gap-2';
 
-    if (item.status === 'done' && item.jpegBlob) {
-      const dl = document.createElement('button');
-      dl.type = 'button';
-      dl.className = 'btn btn-ghost !py-1.5 !px-2.5';
-      dl.textContent = 'Save JPG';
-      dl.addEventListener('click', () => {
-        downloadBlob(item.jpegBlob!, `${stripExtension(item.file.name)}.jpg`);
-      });
-      actions.appendChild(dl);
-    }
-
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'w-8 h-8 inline-flex items-center justify-center border border-[var(--color-rule)] rounded-sm hover:bg-[var(--color-paper-2)]';
@@ -400,7 +389,23 @@ import AdSlot from '../AdSlot.astro';
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
   });
   browse.addEventListener('click', (e) => { e.stopPropagation(); input.click(); });
-  addMoreBtn.addEventListener('click', () => input.click());
+  addMoreBtn.addEventListener('click', () => {
+    // If the previous batch has already finished (any item done or errored
+    // and we're not still converting), treat "Add more" as starting fresh:
+    // clear the list, reset the action bar, then open the picker. Otherwise
+    // Source/Output sums would straddle the old batch and the read-out
+    // gets confusing.
+    const finished = !working && items.some((i) => i.status === 'done' || i.status === 'error');
+    if (finished) {
+      for (const item of items) {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      }
+      items.length = 0;
+      setProgress(0, 'Idle');
+      render();
+    }
+    input.click();
+  });
   clearBtn.addEventListener('click', () => {
     if (working) return;
     for (const item of items) {
