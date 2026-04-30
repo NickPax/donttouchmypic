@@ -72,7 +72,7 @@ block for `position: fixed`, which the header relies on.
 | Manual chunks | `pdf-lib`, `pdfjs` | `heic2any` |
 | Site constants | hardcoded in 3 places | extracted to `src/lib/constants.ts` from day one |
 | Tools live | 6 (merge / split / organize / compress / redact / remove-line-numbers) | 1 (heic-to-jpg) + 5 teasers |
-| Workflow | 6 commits, deploy live, repo public | 1 commit, no remote yet |
+| Workflow | 6 commits, deploy live, repo public | repo public at NickPax/donttouchmypic, deploy live |
 
 If a fix or refactor would benefit both sites (design tokens, CSP, security
 headers, the `AdSlot` component, etc.) — flag it so we can mirror it across.
@@ -93,16 +93,20 @@ PUBLIC_CF_ANALYTICS_TOKEN=<token> npm run deploy
 ```
 
 ## Deploy status (read this before assuming pushes ship)
-- `.github/workflows/deploy.yml` is committed and ready to run. It expects
-  GitHub Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+- `.github/workflows/deploy.yml` is committed. It expects GitHub Secrets:
+  `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
   `PUBLIC_CF_ANALYTICS_TOKEN`, `PUBLIC_ADS_ENABLED`, `PUBLIC_ADSENSE_CLIENT`.
-- **No GitHub remote is configured yet.** `git remote -v` is empty. Until the
-  repo is created at `github.com/NickPax/donttouchmypic` (the URL hardcoded
-  in `constants.ts` and referenced in homepage copy) and `origin` is set,
-  the workflow can't fire. Manual `npm run deploy` from a laptop with
-  `wrangler login` works as the interim path.
+  Whether those secrets are actually set in the repo is a separate
+  question — check the Actions tab after a push to confirm a run started
+  and went green before assuming a push has shipped.
+- The remote is configured: `origin` points at
+  `https://github.com/NickPax/donttouchmypic.git` (matches the URL
+  hardcoded in `constants.ts` and referenced in homepage copy).
+- Manual `npm run deploy` from a laptop with `wrangler login` is the
+  reliable fallback path. Day-to-day pushes *should* trigger the
+  workflow, but the wrangler path always works.
 - The Cloudflare Pages project itself also needs to exist with the name
-  `donttouchmypic` for `wrangler pages deploy` to succeed.
+  `donttouchmypic` for `wrangler pages deploy` to succeed (it does).
 
 ## CSP
 Defined in `public/_headers`. The load-bearing directive is
