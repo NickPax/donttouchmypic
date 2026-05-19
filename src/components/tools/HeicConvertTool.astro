@@ -1,11 +1,17 @@
 ---
-// Client-side HEIC → JPG converter.
-// Strategy: heic2any (libheif WASM) decodes each file in the browser, re-encodes
-// as JPEG at the user's chosen quality, then either downloads a single file or
-// bundles many into a zip via JSZip. Nothing leaves the tab.
+// Client-side HEIC converter, shared by /heic-to-jpg and /heic-to-pdf.
+// Strategy: heic2any (libheif WASM) decodes each file in the browser and
+// re-encodes it as JPEG. For target="jpg" that JPEG is the deliverable; for
+// target="pdf" each JPEG is embedded into a PDF via pdf-lib. Either way the
+// file is downloaded directly, or many are bundled into a zip via JSZip.
+// Nothing leaves the tab.
 import AdSlot from '../AdSlot.astro';
+
+type Props = { target?: 'jpg' | 'pdf' };
+const { target = 'jpg' } = Astro.props;
+const isPdf = target === 'pdf';
 ---
-<section id="tool" class="mx-auto max-w-[1320px] px-5 sm:px-8 pt-10 pb-16">
+<section id="tool" data-target={target} class="mx-auto max-w-[1320px] px-5 sm:px-8 pt-10 pb-16">
   <div class="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8">
     <div>
       <!-- iOS heads-up: revealed by inline script when on iPhone/iPad -->
@@ -74,9 +80,42 @@ import AdSlot from '../AdSlot.astro';
             </div>
             <input id="quality" type="range" min="50" max="100" step="1" value="92" class="w-full mt-3 accent-[var(--color-emerald-dk)]" />
             <p class="mt-2 text-xs text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">
-              Higher = bigger file, closer to the original. 92% is the Apple-friendly sweet spot.
+              {isPdf
+                ? 'Each photo is embedded in the PDF as a JPEG at this quality. Higher = sharper pages, bigger PDF. 92% is the sweet spot.'
+                : 'Higher = bigger file, closer to the original. 92% is the Apple-friendly sweet spot.'}
             </p>
           </div>
+
+          {isPdf && (
+            <div class="mt-6 rule pt-5 space-y-5">
+              <!-- PDF: combine into one document, or one PDF per photo -->
+              <label class="flex items-start gap-3 cursor-pointer">
+                <input id="combine-toggle" type="checkbox" checked class="mt-0.5 w-4 h-4 accent-[var(--color-emerald-dk)]" />
+                <span>
+                  <span class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Combine into one PDF</span>
+                  <span class="block mt-1 text-xs text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">On — every photo becomes a page in a single PDF. Off — each photo gets its own PDF (zipped if there's more than one).</span>
+                </span>
+              </label>
+
+              <!-- PDF: page sizing -->
+              <div>
+                <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Page size</div>
+                <div class="mt-2 flex gap-2" role="radiogroup" aria-label="Page size">
+                  <label class="flex-1 cursor-pointer">
+                    <input type="radio" name="pagesize" value="photo" checked class="sr-only peer" />
+                    <span class="block text-center py-2 px-3 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">Photo-sized</span>
+                  </label>
+                  <label class="flex-1 cursor-pointer">
+                    <input type="radio" name="pagesize" value="a4" class="sr-only peer" />
+                    <span class="block text-center py-2 px-3 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">A4</span>
+                  </label>
+                </div>
+                <p class="mt-2 text-xs text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">
+                  Photo-sized — each page is exactly the photo, no whitespace. A4 — photos centered on standard pages, ready to print.
+                </p>
+              </div>
+            </div>
+          )}
 
           <!-- Action bar -->
           <div class="mt-6 flex flex-wrap items-center justify-between gap-4 rule pt-5">
@@ -89,7 +128,7 @@ import AdSlot from '../AdSlot.astro';
               <!-- Source vs Output, mirroring the DontTouchMyVid action bar.
                    Source is the running total of the queued HEIC sizes;
                    Output is "—" until conversion finishes, then flips to
-                   the total JPG output size. The percent saved sits below. -->
+                   the total output size. The percent saved sits below. -->
               <div class="mt-3 grid grid-cols-[1fr_auto_1fr] gap-2 sm:gap-4 items-center">
                 <div class="min-w-0">
                   <div class="kicker text-[10px]">Source</div>
@@ -120,15 +159,17 @@ import AdSlot from '../AdSlot.astro';
         <h3 class="font-display text-[22px] mt-1 leading-tight">What's running?</h3>
         <ul class="mt-3 text-sm space-y-2 font-mono">
           <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Decoder</span><span>libheif (WASM)</span></li>
-          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Encoder</span><span>Canvas → JPEG</span></li>
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Encoder</span><span>{isPdf ? 'Canvas → JPEG → PDF' : 'Canvas → JPEG'}</span></li>
           <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Network</span><span class="text-[var(--color-emerald-dk)]">idle</span></li>
         </ul>
       </div>
-      <AdSlot position="heic-sidebar" size="300x250" />
+      <AdSlot position={isPdf ? 'heic-pdf-sidebar' : 'heic-sidebar'} size="300x250" />
       <div class="card-ink p-5">
         <div class="font-mono text-[11px] tracking-[0.2em] uppercase opacity-80">Good to know</div>
         <p class="mt-2 text-[15px] leading-relaxed">
-          EXIF metadata (location, camera, timestamp) is <em class="font-display not-italic">stripped</em> by default — the JPG comes out clean. If you need to keep the camera info but ditch the location, that's coming later.
+          {isPdf
+            ? 'Each photo is embedded as a clean JPEG inside the PDF — EXIF metadata (location, camera, timestamp) is stripped along the way, so the PDF carries no hidden GPS or camera data.'
+            : 'EXIF metadata (location, camera, timestamp) is stripped by default — the JPG comes out clean. If you need to keep the camera info but ditch the location, that\'s coming later.'}
         </p>
       </div>
     </aside>
@@ -145,14 +186,23 @@ import AdSlot from '../AdSlot.astro';
     id: string;
     file: File;
     status: Status;
+    // Intermediate JPEG produced by heic2any. The deliverable for the JPG
+    // tool, and the thumbnail source + embed source for the PDF tool.
     jpegBlob?: Blob;
     jpegSize?: number;
+    // Per-file PDF, only set on the PDF tool when "combine" is off.
+    pdfBlob?: Blob;
+    pdfSize?: number;
     error?: string;
     // Lazy-allocated object URL pointing at jpegBlob, used as the thumbnail
     // src once the file is converted. Revoked when the item is removed or
     // the list is cleared so the blob can be garbage-collected.
     previewUrl?: string;
   };
+
+  const root        = document.getElementById('tool') as HTMLElement;
+  const TARGET      = root.dataset.target === 'pdf' ? 'pdf' : 'jpg';
+  const IS_PDF      = TARGET === 'pdf';
 
   const dropzone    = document.getElementById('dropzone') as HTMLDivElement;
   const input       = document.getElementById('file-input') as HTMLInputElement;
@@ -165,6 +215,7 @@ import AdSlot from '../AdSlot.astro';
   const clearBtn    = document.getElementById('clear-all') as HTMLButtonElement;
   const qSlider     = document.getElementById('quality') as HTMLInputElement;
   const qVal        = document.getElementById('quality-val') as HTMLSpanElement;
+  const combineEl   = document.getElementById('combine-toggle') as HTMLInputElement | null;
   const convertBtn  = document.getElementById('convert-btn') as HTMLButtonElement;
   const progBar     = document.getElementById('progress-bar') as HTMLSpanElement;
   const progNum     = document.getElementById('progress-num') as HTMLSpanElement;
@@ -177,6 +228,17 @@ import AdSlot from '../AdSlot.astro';
 
   const items: Item[] = [];
   let working = false;
+
+  // Snapshot of how the last batch was assembled, used by render() to show
+  // the Output stat. A combined PDF has no per-file size, so its total is
+  // captured here once the document is built.
+  let combineForStats = false;
+  let combinedOutSize = 0;
+
+  function readPageSize(): 'photo' | 'a4' {
+    const checked = document.querySelector('input[name="pagesize"]:checked') as HTMLInputElement | null;
+    return checked?.value === 'a4' ? 'a4' : 'photo';
+  }
 
   let errTimer: ReturnType<typeof setTimeout> | undefined;
   function showErr(msg: string, persist = false) {
@@ -239,14 +301,16 @@ import AdSlot from '../AdSlot.astro';
     panel.classList.remove('hidden');
 
     const totalSize = items.reduce((acc, it) => acc + it.file.size, 0);
-    const totalOut  = items.reduce((acc, it) => acc + (it.jpegSize ?? 0), 0);
+    // Output total: JPG sums the JPEG sizes; PDF sums the per-file PDF sizes,
+    // except in combine mode where the single document's size is the total.
+    const totalOut = !IS_PDF
+      ? items.reduce((acc, it) => acc + (it.jpegSize ?? 0), 0)
+      : combineForStats
+        ? combinedOutSize
+        : items.reduce((acc, it) => acc + (it.pdfSize ?? 0), 0);
     chipCount.textContent = `${items.length} file${items.length === 1 ? '' : 's'}`;
     chipSize.textContent  = formatBytes(totalSize);
 
-    // Source/Output pair in the action bar — Source is always the running
-    // total of the queued HEICs; Output stays at "—" until at least one
-    // file is converted, then shows the cumulative JPG size and the
-    // saved-line lights up underneath in emerald.
     inStat.textContent  = formatBytes(totalSize);
     const doneCount = items.filter((i) => i.status === 'done').length;
     if (doneCount > 0 && totalOut > 0) {
@@ -304,7 +368,11 @@ import AdSlot from '../AdSlot.astro';
     meta.className = 'font-mono text-[11px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]';
     let metaText = formatBytes(item.file.size);
     if (item.status === 'converting') metaText += ' · converting…';
-    else if (item.status === 'done')   metaText += ` → ${formatBytes(item.jpegSize ?? 0)} · converted`;
+    else if (item.status === 'done') {
+      if (!IS_PDF) metaText += ` → ${formatBytes(item.jpegSize ?? 0)} · converted`;
+      else if (item.pdfSize != null) metaText += ` → ${formatBytes(item.pdfSize)} · PDF`;
+      else metaText += ' · added to PDF';
+    }
     else if (item.status === 'error')  metaText += ` · ${item.error ?? 'error'}`;
     else                                metaText += ' · ready';
     meta.textContent = metaText;
@@ -389,6 +457,18 @@ import AdSlot from '../AdSlot.astro';
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
   });
   browse.addEventListener('click', (e) => { e.stopPropagation(); input.click(); });
+
+  function resetBatch() {
+    for (const item of items) {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    }
+    items.length = 0;
+    combineForStats = false;
+    combinedOutSize = 0;
+    setProgress(0, 'Idle');
+    render();
+  }
+
   addMoreBtn.addEventListener('click', () => {
     // If the previous batch has already finished (any item done or errored
     // and we're not still converting), treat "Add more" as starting fresh:
@@ -396,24 +476,12 @@ import AdSlot from '../AdSlot.astro';
     // Source/Output sums would straddle the old batch and the read-out
     // gets confusing.
     const finished = !working && items.some((i) => i.status === 'done' || i.status === 'error');
-    if (finished) {
-      for (const item of items) {
-        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-      }
-      items.length = 0;
-      setProgress(0, 'Idle');
-      render();
-    }
+    if (finished) resetBatch();
     input.click();
   });
   clearBtn.addEventListener('click', () => {
     if (working) return;
-    for (const item of items) {
-      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-    }
-    items.length = 0;
-    render();
-    setProgress(0, 'Idle');
+    resetBatch();
   });
 
   ['dragenter', 'dragover'].forEach((evt) => dropzone.addEventListener(evt, (e) => {
@@ -439,6 +507,57 @@ import AdSlot from '../AdSlot.astro';
   // --- Quality slider ---
   qSlider.addEventListener('input', () => { qVal.textContent = qSlider.value; });
 
+  // Read the pixel dimensions of a JPEG blob — needed to size PDF pages.
+  function imageSize(blob: Blob): Promise<{ w: number; h: number }> {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve({ w: img.naturalWidth, h: img.naturalHeight }); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('could not read image')); };
+      img.src = url;
+    });
+  }
+
+  // A4 in PDF points (72 dpi): 595.28 × 841.89.
+  const A4_SHORT = 595.28;
+  const A4_LONG  = 841.89;
+  const A4_MARGIN = 24;
+
+  // Embed one JPEG as a page in the given PDFDocument.
+  async function addJpegPage(
+    pdf: any,
+    jpegBlob: Blob,
+    pageSize: 'photo' | 'a4',
+  ) {
+    const bytes = new Uint8Array(await jpegBlob.arrayBuffer());
+    const img = await pdf.embedJpg(bytes);
+    if (pageSize === 'a4') {
+      // Orient the page to match the photo so the fit is as large as possible.
+      const landscape = img.width > img.height;
+      const pw = landscape ? A4_LONG : A4_SHORT;
+      const ph = landscape ? A4_SHORT : A4_LONG;
+      const page = pdf.addPage([pw, ph]);
+      const maxW = pw - A4_MARGIN * 2;
+      const maxH = ph - A4_MARGIN * 2;
+      const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      page.drawImage(img, { x: (pw - w) / 2, y: (ph - h) / 2, width: w, height: h });
+    } else {
+      const page = pdf.addPage([img.width, img.height]);
+      page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+    }
+  }
+
+  // Dedupe output names defensively: "IMG.pdf", "IMG (2).pdf", …
+  function uniqueName(base: string, ext: string, seen: Set<string>): string {
+    let name = `${base}.${ext}`;
+    let n = 2;
+    while (seen.has(name)) { name = `${base} (${n}).${ext}`; n++; }
+    seen.add(name);
+    return name;
+  }
+
   // --- Conversion ---
   convertBtn.addEventListener('click', async () => {
     const toProcess = items.filter((i) => i.status === 'ready');
@@ -447,14 +566,21 @@ import AdSlot from '../AdSlot.astro';
     working = true;
     convertBtn.disabled = true;
     const quality = Math.max(50, Math.min(100, +qSlider.value)) / 100;
+    const combine = IS_PDF && !!combineEl?.checked;
+    const pageSize = IS_PDF ? readPageSize() : 'photo';
+    combineForStats = combine;
+    combinedOutSize = 0;
 
     setProgress(1, `Converting 1 of ${toProcess.length}`);
 
+    // Phase 1 — decode every HEIC to a JPEG. On the PDF tool with combine
+    // off, each file's single-page PDF is also built here so the Output
+    // stat ticks up live; with combine on the document is assembled after.
     for (let i = 0; i < toProcess.length; i++) {
       const item = toProcess[i];
       item.status = 'converting';
       render();
-      setProgress(((i) / toProcess.length) * 90 + 2, `Converting ${i + 1} of ${toProcess.length}`);
+      setProgress(((i) / toProcess.length) * 88 + 2, `Converting ${i + 1} of ${toProcess.length}`);
 
       try {
         const result = await heic2any({
@@ -465,7 +591,17 @@ import AdSlot from '../AdSlot.astro';
         const blob: Blob = Array.isArray(result) ? result[0] : result;
         item.jpegBlob = blob;
         item.jpegSize = blob.size;
-        item.status   = 'done';
+
+        if (IS_PDF && !combine) {
+          const { PDFDocument } = await import('pdf-lib');
+          const pdf = await PDFDocument.create();
+          await addJpegPage(pdf, blob, pageSize);
+          const pdfBytes = await pdf.save();
+          item.pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+          item.pdfSize = item.pdfBlob.size;
+        }
+
+        item.status = 'done';
       } catch (err) {
         console.error(err);
         item.status = 'error';
@@ -474,33 +610,68 @@ import AdSlot from '../AdSlot.astro';
       render();
     }
 
-    setProgress(94, 'Packaging');
-
     const done = items.filter((i) => i.status === 'done' && i.jpegBlob);
     if (done.length === 0) {
       showErr('No files could be converted. They may not be valid HEIC images.');
       setProgress(0, 'Idle');
-    } else if (done.length === 1) {
-      const item = done[0];
-      downloadBlob(item.jpegBlob!, `${stripExtension(item.file.name)}.jpg`);
-      setProgress(100, 'Done · 1 file');
-    } else {
-      const zip = new JSZip();
-      const names = new Set<string>();
-      for (const item of done) {
-        let name = `${stripExtension(item.file.name)}.jpg`;
-        // Dedupe names defensively: "IMG.jpg", "IMG (2).jpg", …
-        let n = 2;
-        while (names.has(name)) {
-          name = `${stripExtension(item.file.name)} (${n}).jpg`;
-          n++;
+      working = false;
+      render();
+      return;
+    }
+
+    setProgress(94, 'Packaging');
+
+    try {
+      if (IS_PDF && combine) {
+        // Phase 2 — one document, one page per photo.
+        const { PDFDocument } = await import('pdf-lib');
+        const pdf = await PDFDocument.create();
+        for (const item of done) {
+          await addJpegPage(pdf, item.jpegBlob!, pageSize);
         }
-        names.add(name);
-        zip.file(name, item.jpegBlob!);
+        const pdfBytes = await pdf.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        combinedOutSize = blob.size;
+        const name = done.length === 1
+          ? `${stripExtension(done[0].file.name)}.pdf`
+          : `dtmp-heic-to-pdf-${todayStamp()}.pdf`;
+        downloadBlob(blob, name);
+        setProgress(100, `Done · 1 PDF · ${done.length} page${done.length === 1 ? '' : 's'}`);
+      } else if (IS_PDF) {
+        // One PDF per photo, built in phase 1; download or zip them.
+        if (done.length === 1) {
+          downloadBlob(done[0].pdfBlob!, `${stripExtension(done[0].file.name)}.pdf`);
+          setProgress(100, 'Done · 1 PDF');
+        } else {
+          const zip = new JSZip();
+          const names = new Set<string>();
+          for (const item of done) {
+            zip.file(uniqueName(stripExtension(item.file.name), 'pdf', names), item.pdfBlob!);
+          }
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          downloadBlob(zipBlob, `dtmp-heic-to-pdf-${todayStamp()}.zip`);
+          setProgress(100, `Done · ${done.length} PDFs`);
+        }
+      } else {
+        // JPG tool: the JPEG is the deliverable.
+        if (done.length === 1) {
+          downloadBlob(done[0].jpegBlob!, `${stripExtension(done[0].file.name)}.jpg`);
+          setProgress(100, 'Done · 1 file');
+        } else {
+          const zip = new JSZip();
+          const names = new Set<string>();
+          for (const item of done) {
+            zip.file(uniqueName(stripExtension(item.file.name), 'jpg', names), item.jpegBlob!);
+          }
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          downloadBlob(zipBlob, `dtmp-heic-to-jpg-${todayStamp()}.zip`);
+          setProgress(100, `Done · ${done.length} files`);
+        }
       }
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      downloadBlob(zipBlob, `dtmp-heic-to-jpg-${todayStamp()}.zip`);
-      setProgress(100, `Done · ${done.length} files`);
+    } catch (err) {
+      console.error(err);
+      showErr('Something went wrong while packaging the download.');
+      setProgress(0, 'Idle');
     }
 
     working = false;

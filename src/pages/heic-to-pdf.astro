@@ -1,0 +1,139 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ToolHeader from '../components/ToolHeader.astro';
+import HeicConvertTool from '../components/tools/HeicConvertTool.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Faq from '../components/Faq.astro';
+import RelatedTools from '../components/RelatedTools.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { SITE_NAME, SITE_URL } from '../lib/constants';
+
+const title = 'Convert HEIC to PDF — free, in your browser, nothing uploads · ' + SITE_NAME;
+const description = "Turn iPhone HEIC photos into a PDF without uploading them anywhere. Combine a whole batch into one document or get a PDF per photo. Runs entirely in your browser — your pictures never leave your device. Free, no sign-up, no watermarks.";
+
+const steps = [
+  { title: 'Drop the HEIC files', body: "Add one photo or a whole stack. Your browser holds them in memory — no upload, no queue on some stranger's server." },
+  { title: 'Pick how the PDF is built', body: "Combine every photo into one document or get a PDF each. Choose photo-sized pages for a tight 1:1 fit, or A4 for printing." },
+  { title: 'Your browser does the work', body: 'libheif decodes the HEIC, a canvas re-encodes each photo as a JPEG, and pdf-lib assembles the PDF. Every step happens in this tab.' },
+];
+
+const faq = [
+  { q: 'Why convert HEIC photos to PDF at all?', a: "A PDF is the most universal way to hand someone a photo — it opens on every device, every operating system, and inside every browser without a special codec. It's the natural format for receipts, ID scans, document photos, and anything you need to attach to a form or email as a single tidy file." },
+  { q: 'Can I combine several photos into one PDF?', a: "Yes. Leave <strong>Combine into one PDF</strong> on and every photo you drop becomes a page in a single document — handy for multi-page receipts or a scanned set. Turn it off and each photo becomes its own PDF, bundled in a zip when there's more than one." },
+  { q: "What's the difference between photo-sized and A4 pages?", a: "Photo-sized makes each PDF page exactly the photo's dimensions — no borders, no whitespace, a faithful 1:1 image PDF. A4 centers each photo on a standard A4 page with a small margin, which is what you want if the PDF is going to a printer." },
+  { q: 'Does this really run in my browser?', a: "Yes. Decoding uses <a href='https://github.com/strukturag/libheif' target='_blank' rel='noopener noreferrer' class='underline decoration-[var(--color-emerald-dk)] decoration-2 underline-offset-4'>libheif</a> compiled to WebAssembly, and the PDF is built with pdf-lib — both run entirely in this tab. Open your browser's network panel while you convert and watch nothing upload. The only requests are for the page's own static assets." },
+  { q: 'What about EXIF metadata (location, camera, timestamp)?', a: "Each photo is re-encoded as a clean JPEG before it goes into the PDF, which strips EXIF along the way. The finished PDF carries no GPS coordinates, no camera model, no capture time — useful when you're about to send it to someone." },
+  { q: 'How many photos can I put in one PDF?', a: "As many as your browser's RAM can hold. Desktop browsers will happily build a PDF from a few hundred photos; on mobile, stick to 30–50 high-resolution iPhone shots at a time. If the tab goes sluggish, work in smaller batches." },
+  { q: 'Is anything sent to a server?', a: "No. The whole site is a static bundle served from a CDN — there is no backend to receive files. You can check the source on <a href='https://github.com/NickPax/donttouchmypic' target='_blank' rel='noopener noreferrer' class='underline decoration-[var(--color-emerald-dk)] decoration-2 underline-offset-4'>GitHub</a> if you want to verify that for yourself." },
+];
+
+const sd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: `${SITE_NAME} HEIC to PDF`,
+    url: `${SITE_URL}/heic-to-pdf`,
+    applicationCategory: 'Utilities',
+    operatingSystem: 'Any (browser-based)',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a.replace(/<[^>]+>/g, '') },
+    })),
+  },
+];
+---
+<BaseLayout title={title} description={description} path="/heic-to-pdf" structuredData={sd}>
+  <ToolHeader
+    kicker="Tool · 02"
+    title="HEIC → PDF"
+    tagline="Turn iPhone photos into a document anyone can open."
+    description="Drop HEIC or HEIF files, choose one combined PDF or a PDF per photo, download. Every step happens in this tab — your photos never touch a server, because there isn't one."
+    accent="emerald"
+  >
+    <svg slot="icon" viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M9 13h6M9 17h4"/></svg>
+  </ToolHeader>
+
+  <HeicConvertTool target="pdf" />
+
+  <!-- When you'd want this -->
+  <section class="mx-auto max-w-[1320px] px-5 sm:px-8 py-20 border-t border-[var(--color-rule)]">
+    <div class="grid md:grid-cols-[320px_1fr] gap-10 items-start">
+      <div class="md:sticky md:top-28 self-start">
+        <div class="section-num">§02b · Use cases</div>
+        <h2 class="mt-2 display-2">When you'd want this.</h2>
+        <p class="mt-4 text-sm text-[color-mix(in_srgb,var(--color-ink)_80%,transparent)] max-w-xs">
+          Whenever a photo needs to behave like a <em class="font-display not-italic">document</em> — one file, opens anywhere, ready to send.
+        </p>
+      </div>
+
+      <ul class="grid sm:grid-cols-2 gap-4">
+        {[
+          {
+            t: 'Submitting receipts and expenses',
+            b: 'Snap the receipts, drop them in, get one PDF. Expense tools and finance teams want a single document, not a folder of HEICs they can’t open.',
+            k: 'Expenses · one file',
+            icon: '<path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6"/>',
+          },
+          {
+            t: 'Scanning documents with your phone',
+            b: 'Photograph a contract, a form, a page of notes — combine the shots into a single multi-page PDF that reads like a proper scan.',
+            k: 'Scans · multi-page',
+            icon: '<path d="M4 7V4h3M20 7V4h-3M4 17v3h3M20 17v3h-3"/><path d="M7 12h10"/>',
+          },
+          {
+            t: 'Attaching ID or proof photos to a form',
+            b: 'Passport pages, a driving licence, proof of address — most portals take a PDF cleanly and choke on HEIC. One file, accepted.',
+            k: 'Forms · accepted',
+            icon: '<rect x="3" y="5" width="18" height="14" rx="1"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h4M6 16h7"/>',
+          },
+          {
+            t: 'Emailing a set of photos as one attachment',
+            b: 'Instead of ten separate image attachments, send a single PDF. It threads neatly, downloads once, and opens on the recipient’s phone.',
+            k: 'Email · tidy',
+            icon: '<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 7l9 6 9-6"/>',
+          },
+          {
+            t: 'Printing photos at a shop or office',
+            b: 'A4 pages, photos centered, margins handled — hand the print desk one PDF instead of a USB stick full of files nothing there can read.',
+            k: 'Print · A4-ready',
+            icon: '<path d="M6 9V2h12v7"/><rect x="6" y="14" width="12" height="8"/><path d="M6 18H2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5h-4"/>',
+          },
+          {
+            t: 'Archiving photos in a stable format',
+            b: 'HEIC is an Apple-era format that older software may not open in ten years. A PDF of photo-sized pages is a safe, universal long-term keep.',
+            k: 'Archive · future-proof',
+            icon: '<rect x="3" y="4" width="18" height="5"/><path d="M5 9v11h14V9"/><path d="M10 13h4"/>',
+          },
+        ].map((u) => (
+          <li class="card p-6 flex flex-col min-h-[200px]">
+            <div class="flex items-center justify-between">
+              <span class="w-10 h-10 inline-flex items-center justify-center rounded-sm bg-[var(--color-emerald-lt)] text-[var(--color-emerald-dk)]">
+                <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" set:html={u.icon}></svg>
+              </span>
+              <span class="font-mono text-[10px] tracking-[0.18em] uppercase text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]">{u.k}</span>
+            </div>
+            <h3 class="mt-6 font-display text-[24px] leading-tight">{u.t}.</h3>
+            <p class="mt-2 text-[14.5px] leading-relaxed text-[color-mix(in_srgb,var(--color-ink)_82%,transparent)]">{u.b}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <p class="mt-10 pt-6 rule font-mono text-[12px] tracking-[0.12em] uppercase text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]">
+      Just need the picture itself, not a document? The <a href="/heic-to-jpg" class="underline underline-offset-4 decoration-[var(--color-emerald-dk)] decoration-2">HEIC → JPG</a> tool gives you a plain image instead.
+    </p>
+  </section>
+
+  <AdSlot position="heic-pdf-under-tool" size="970x250" />
+  <HowItWorks steps={steps} heading="How the conversion happens" />
+  <Faq items={faq} heading="HEIC → PDF · FAQ" />
+  <AdSlot position="heic-pdf-faq-bottom" size="728x90" />
+  <RelatedTools current="heic-to-pdf" />
+</BaseLayout>

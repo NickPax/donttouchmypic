@@ -12,7 +12,7 @@ export default defineConfig({
       // Pre-bundle the client-side image libs used by inline <script> blocks.
       // Empty entries stops esbuild from trying to scan .astro files itself.
       entries: [],
-      include: ['heic2any', 'jszip'],
+      include: ['heic2any', 'jszip', 'pdf-lib'],
     },
     worker: {
       format: 'es',
@@ -22,6 +22,7 @@ export default defineConfig({
         output: {
           manualChunks: {
             'heic2any': ['heic2any'],
+            'pdf-lib': ['pdf-lib'],
           },
         },
       },

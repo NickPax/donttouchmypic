@@ -1,9 +1,10 @@
 ---
-type Props = { current: 'heic-to-jpg' | 'convert' | 'compress' | 'resize' | 'crop' | 'rotate' };
+type Props = { current: 'heic-to-jpg' | 'heic-to-pdf' | 'convert' | 'compress' | 'resize' | 'crop' | 'rotate' };
 const { current } = Astro.props;
 
 const all = [
   { id: 'heic-to-jpg', href: '/heic-to-jpg', title: 'HEIC → JPG',  sub: 'Make iPhone photos portable.',        live: true  },
+  { id: 'heic-to-pdf', href: '/heic-to-pdf', title: 'HEIC → PDF',  sub: 'Photos into a document anyone opens.', live: true  },
   { id: 'convert',     href: '/convert',     title: 'Convert',     sub: 'PNG, JPG, WebP — pick and swap.',    live: false },
   { id: 'compress',    href: '/compress',    title: 'Compress',    sub: 'Shrink photos for email and web.',    live: false },
   { id: 'resize',      href: '/resize',      title: 'Resize',      sub: 'Target width, height, or percent.',  live: false },
