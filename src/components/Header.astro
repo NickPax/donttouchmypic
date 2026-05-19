@@ -2,8 +2,6 @@
 const path = Astro.url.pathname;
 const isActive = (p: string) => (path === p || (p !== '/' && path.startsWith(p)));
 const links = [
-  { href: '/heic-to-jpg', label: 'HEIC → JPG' },
-  { href: '/heic-to-pdf', label: 'HEIC → PDF' },
   { href: '/convert',     label: 'Convert' },
   { href: '/compress',    label: 'Compress' },
   { href: '/resize',      label: 'Resize' },

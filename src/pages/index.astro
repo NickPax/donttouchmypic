@@ -2,6 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Hero from '../components/Hero.astro';
 import ToolGrid from '../components/ToolGrid.astro';
+import PopularConversions from '../components/PopularConversions.astro';
 import TrustSection from '../components/TrustSection.astro';
 import HowItWorks from '../components/HowItWorks.astro';
 import Faq from '../components/Faq.astro';
@@ -55,6 +56,7 @@ const sd = [
 <BaseLayout title={title} description={description} path="/" structuredData={sd}>
   <Hero />
   <ToolGrid />
+  <PopularConversions />
   <AdSlot position="home-mid" size="728x90" />
   <TrustSection />
   <HowItWorks steps={steps} heading="Three steps" />

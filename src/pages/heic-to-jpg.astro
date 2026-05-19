@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ToolHeader from '../components/ToolHeader.astro';
-import HeicConvertTool from '../components/tools/HeicConvertTool.astro';
+import ConvertTool from '../components/tools/ConvertTool.astro';
 import HowItWorks from '../components/HowItWorks.astro';
 import Faq from '../components/Faq.astro';
 import RelatedTools from '../components/RelatedTools.astro';
@@ -60,7 +60,7 @@ const sd = [
     <svg slot="icon" viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="7" height="11" rx="1"/><rect x="14" y="8" width="7" height="11" rx="1"/><path d="M10 12h4"/><path d="M13 9l2 3-2 3"/></svg>
   </ToolHeader>
 
-  <HeicConvertTool target="jpg" />
+  <ConvertTool defaultOutput="jpg" />
 
   <!-- When you'd want this -->
   <section class="mx-auto max-w-[1320px] px-5 sm:px-8 py-20 border-t border-[var(--color-rule)]">

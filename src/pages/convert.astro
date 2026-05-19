@@ -1,0 +1,139 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ToolHeader from '../components/ToolHeader.astro';
+import ConvertTool from '../components/tools/ConvertTool.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Faq from '../components/Faq.astro';
+import RelatedTools from '../components/RelatedTools.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { SITE_NAME, SITE_URL } from '../lib/constants';
+
+const title = 'Convert images — JPG, PNG, WebP, PDF, HEIC · free, nothing uploads · ' + SITE_NAME;
+const description = "Convert images between JPG, PNG, WebP and PDF — and from iPhone HEIC — without uploading them anywhere. Drop any image, pick a format, download. Runs entirely in your browser; your pictures never leave your device. Free, batch-friendly, no sign-up, no watermarks.";
+
+const steps = [
+  { title: 'Drop any images', body: "Add one file or a whole batch — HEIC, JPG, PNG, WebP, GIF and more. Your browser holds them in memory; nothing uploads." },
+  { title: 'Pick the output format', body: "Choose JPG, PNG, WebP or PDF. The tool reads whatever you dropped — there's no combination list to wade through." },
+  { title: 'Your browser does the work', body: 'The Canvas API re-encodes each image (libheif decodes HEIC, pdf-lib builds PDFs). Single file? Direct download. Batch? A tidy zip.' },
+];
+
+const faq = [
+  { q: 'Which formats can I convert between?', a: "Input can be HEIC/HEIF, JPG, PNG, WebP, GIF or BMP — whatever you drop is auto-detected. Output is JPG, PNG, WebP or PDF. Because the input is simply the file you added, there's no need for a giant grid of every possible pairing." },
+  { q: 'Does this really run in my browser?', a: "Yes. Standard formats are re-encoded with the browser's own Canvas API; HEIC is decoded by <a href='https://github.com/strukturag/libheif' target='_blank' rel='noopener noreferrer' class='underline decoration-[var(--color-emerald-dk)] decoration-2 underline-offset-4'>libheif</a> compiled to WebAssembly; PDFs are assembled with pdf-lib. All of it happens in this tab — open your network panel and watch nothing upload." },
+  { q: 'When should I use each format?', a: "<strong>JPG</strong> — photos, smallest files, no transparency. <strong>PNG</strong> — screenshots, logos, anything needing crisp edges or transparency; lossless. <strong>WebP</strong> — modern photos and graphics, smaller than both JPG and PNG, keeps transparency. <strong>PDF</strong> — when a photo needs to behave like a document you can send or print." },
+  { q: 'What happens to transparency?', a: "Converting to PNG or WebP keeps transparency. Converting to JPG or PDF flattens it onto a white background, because those formats can't store an alpha channel." },
+  { q: 'What about EXIF metadata (location, camera, timestamp)?', a: "Re-encoding strips EXIF, so the converted file carries no GPS coordinates, camera model or capture time. Camera-orientation data is applied to the pixels first, so the image stays the right way up." },
+  { q: 'Can I convert a whole batch at once?', a: "Yes. Drop as many images as your browser's RAM can hold — they convert one after another and download as a single zip. For PDF output you can also combine the whole batch into one multi-page document." },
+  { q: 'Is anything sent to a server?', a: "No. The whole site is a static bundle served from a CDN — there is no backend to receive files. You can check the source on <a href='https://github.com/NickPax/donttouchmypic' target='_blank' rel='noopener noreferrer' class='underline decoration-[var(--color-emerald-dk)] decoration-2 underline-offset-4'>GitHub</a> if you want to verify that for yourself." },
+];
+
+const sd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: `${SITE_NAME} Image Converter`,
+    url: `${SITE_URL}/convert`,
+    applicationCategory: 'Utilities',
+    operatingSystem: 'Any (browser-based)',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a.replace(/<[^>]+>/g, '') },
+    })),
+  },
+];
+---
+<BaseLayout title={title} description={description} path="/convert" structuredData={sd}>
+  <ToolHeader
+    kicker="Tool · 01"
+    title="Convert"
+    tagline="Any image in, the format you need out."
+    description="Drop HEIC, JPG, PNG, WebP or GIF, pick JPG, PNG, WebP or PDF, download. Every step happens in this tab — your images never touch a server, because there isn't one."
+    accent="emerald"
+  >
+    <svg slot="icon" viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9a7 7 0 0 1 12-3l3 3"/><path d="M19 4v5h-5"/><path d="M20 15a7 7 0 0 1-12 3l-3-3"/><path d="M5 20v-5h5"/></svg>
+  </ToolHeader>
+
+  <ConvertTool />
+
+  <!-- When you'd want this -->
+  <section class="mx-auto max-w-[1320px] px-5 sm:px-8 py-20 border-t border-[var(--color-rule)]">
+    <div class="grid md:grid-cols-[320px_1fr] gap-10 items-start">
+      <div class="md:sticky md:top-28 self-start">
+        <div class="section-num">§01b · Use cases</div>
+        <h2 class="mt-2 display-2">When you'd want this.</h2>
+        <p class="mt-4 text-sm text-[color-mix(in_srgb,var(--color-ink)_80%,transparent)] max-w-xs">
+          One tool for every <em class="font-display not-italic">"it won't open / it's too big / wrong format"</em> moment.
+        </p>
+      </div>
+
+      <ul class="grid sm:grid-cols-2 gap-4">
+        {[
+          {
+            t: 'iPhone HEIC into something universal',
+            b: "HEIC is brilliant inside Apple's world and a nuisance everywhere else. Convert to JPG for compatibility, or PDF to send as a document.",
+            k: 'HEIC · portable',
+            icon: '<rect x="3" y="5" width="7" height="11" rx="1"/><rect x="14" y="8" width="7" height="11" rx="1"/><path d="M10 12h4"/><path d="M13 9l2 3-2 3"/>',
+          },
+          {
+            t: 'PNG screenshots that are too heavy',
+            b: 'A full-screen PNG can be several megabytes. Re-save it as JPG or WebP and it shrinks dramatically — ideal for email and chat.',
+            k: 'PNG → JPG · lighter',
+            icon: '<rect x="4" y="9" width="16" height="7" rx="1"/><path d="M8 5l4 2 4-2M8 20l4-2 4 2"/>',
+          },
+          {
+            t: 'WebP files an app refuses to open',
+            b: "Saved an image off the web and it came down as WebP? Some editors and older apps still don't read it. Convert to JPG or PNG and it just works.",
+            k: 'WebP · accepted',
+            icon: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
+          },
+          {
+            t: 'Smaller photos with WebP',
+            b: 'WebP keeps the quality of JPG and the transparency of PNG at a noticeably smaller size — a great default for anything headed to the web.',
+            k: 'WebP · efficient',
+            icon: '<path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/>',
+          },
+          {
+            t: 'Photos into a PDF document',
+            b: 'Receipts, ID scans, a set of pictures for a form — combine them into one PDF, or get a PDF each, with photo-sized or A4 pages.',
+            k: 'PDF · one file',
+            icon: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M9 13h6M9 17h4"/>',
+          },
+          {
+            t: 'Transparency where you need it',
+            b: 'Convert a flat JPG logo to PNG, or a heavy PNG to WebP, keeping the transparent background intact. JPG output flattens onto white.',
+            k: 'Alpha · respected',
+            icon: '<path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/>',
+          },
+        ].map((u) => (
+          <li class="card p-6 flex flex-col min-h-[200px]">
+            <div class="flex items-center justify-between">
+              <span class="w-10 h-10 inline-flex items-center justify-center rounded-sm bg-[var(--color-emerald-lt)] text-[var(--color-emerald-dk)]">
+                <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" set:html={u.icon}></svg>
+              </span>
+              <span class="font-mono text-[10px] tracking-[0.18em] uppercase text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]">{u.k}</span>
+            </div>
+            <h3 class="mt-6 font-display text-[24px] leading-tight">{u.t}.</h3>
+            <p class="mt-2 text-[14.5px] leading-relaxed text-[color-mix(in_srgb,var(--color-ink)_82%,transparent)]">{u.b}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <p class="mt-10 pt-6 rule font-mono text-[12px] tracking-[0.12em] uppercase text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]">
+      Converting iPhone photos specifically? <a href="/heic-to-jpg" class="underline underline-offset-4 decoration-[var(--color-emerald-dk)] decoration-2">HEIC → JPG</a> and <a href="/heic-to-pdf" class="underline underline-offset-4 decoration-[var(--color-emerald-dk)] decoration-2">HEIC → PDF</a> are the same tool, pre-set for the job.
+    </p>
+  </section>
+
+  <AdSlot position="convert-under-tool" size="970x250" />
+  <HowItWorks steps={steps} heading="How the conversion happens" />
+  <Faq items={faq} heading="Image converter · FAQ" />
+  <AdSlot position="convert-faq-bottom" size="728x90" />
+  <RelatedTools current="convert" />
+</BaseLayout>

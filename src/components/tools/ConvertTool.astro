@@ -1,26 +1,27 @@
 ---
-// Client-side HEIC converter, shared by /heic-to-jpg and /heic-to-pdf.
-// Strategy: heic2any (libheif WASM) decodes each file in the browser and
-// re-encodes it as JPEG. For target="jpg" that JPEG is the deliverable; for
-// target="pdf" each JPEG is embedded into a PDF via pdf-lib. Either way the
-// file is downloaded directly, or many are bundled into a zip via JSZip.
-// Nothing leaves the tab.
+// Universal client-side image converter, shared by /convert, /heic-to-jpg
+// and /heic-to-pdf. Drop any common raster image; the tool auto-detects the
+// input format and re-encodes it to the format you pick (JPG / PNG / WebP /
+// PDF). HEIC/HEIF decode through heic2any (libheif WASM, lazily imported);
+// everything else decodes via the browser's own Canvas pipeline. PDF output
+// is assembled with pdf-lib. Single files download directly, batches are
+// bundled into a zip via JSZip. Nothing leaves the tab.
 import AdSlot from '../AdSlot.astro';
 
-type Props = { target?: 'jpg' | 'pdf' };
-const { target = 'jpg' } = Astro.props;
-const isPdf = target === 'pdf';
+type Props = { defaultOutput?: 'jpg' | 'png' | 'webp' | 'pdf' };
+const { defaultOutput = 'jpg' } = Astro.props;
+const formats = ['jpg', 'png', 'webp', 'pdf'] as const;
 ---
-<section id="tool" data-target={target} class="mx-auto max-w-[1320px] px-5 sm:px-8 pt-10 pb-16">
+<section id="tool" class="mx-auto max-w-[1320px] px-5 sm:px-8 pt-10 pb-16">
   <div class="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8">
     <div>
       <!-- iOS heads-up: revealed by inline script when on iPhone/iPad -->
       <div id="ios-note" hidden class="mb-5 card p-4 flex items-start gap-3">
         <span class="shrink-0 mt-0.5 inline-flex w-6 h-6 items-center justify-center rounded-sm bg-[var(--color-emerald-lt)] text-[var(--color-emerald-dk)] font-mono text-[11px] font-bold">i</span>
         <div class="min-w-0 text-sm leading-relaxed">
-          <div class="font-display text-[17px] leading-tight">On iPhone? Photos already arrive as JPG.</div>
+          <div class="font-display text-[17px] leading-tight">On iPhone? HEIC photos may already arrive as JPG.</div>
           <p class="mt-1 text-[color-mix(in_srgb,var(--color-ink)_75%,transparent)]">
-            Safari converts HEIC to JPEG when you upload from the Photos app — so picking a photo here usually skips the conversion you'd want. To keep originals, open the <strong class="font-semibold">Files</strong> app and share from there, or set <strong class="font-semibold">Settings → Photos → Transfer to Mac or PC → Keep Originals</strong>. This tool is most useful on a desktop where a <code>.heic</code> file already lives.
+            Safari converts HEIC to JPEG when you upload from the Photos app. That's fine if you just want a JPG — but to convert the true original, open the <strong class="font-semibold">Files</strong> app and share from there, or set <strong class="font-semibold">Settings → Photos → Transfer to Mac or PC → Keep Originals</strong>.
           </p>
         </div>
       </div>
@@ -31,17 +32,17 @@ const isPdf = target === 'pdf';
         class="drop-target relative rounded-sm p-10 md:p-14 text-center cursor-pointer"
         role="button"
         tabindex="0"
-        aria-label="Drop HEIC photos here, or click to browse"
+        aria-label="Drop images here, or click to browse"
       >
         <div class="scanline rounded-sm" data-scanline hidden></div>
         <div class="relative">
           <div class="mx-auto w-14 h-14 inline-flex items-center justify-center rounded-sm bg-[var(--color-emerald-lt)] text-[var(--color-emerald-dk)]">
             <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="7" height="11" rx="1"/><rect x="14" y="8" width="7" height="11" rx="1"/><path d="M10 12h4"/><path d="M13 9l2 3-2 3"/></svg>
           </div>
-          <h2 class="mt-5 display-3">Drop HEIC photos here.</h2>
+          <h2 class="mt-5 display-3">Drop your images here.</h2>
           <p class="mt-2 text-sm text-[color-mix(in_srgb,var(--color-ink)_75%,transparent)]">
             Drag straight from a file window — or <button type="button" id="browse" class="underline decoration-[var(--color-emerald-dk)] decoration-2 underline-offset-4">browse</button>.
-            HEIC &amp; HEIF · as many as your browser can hold.
+            HEIC, JPG, PNG, WebP, GIF &amp; more · as many as your browser can hold.
           </p>
         </div>
         <!-- No HTML-side accept filter. Different desktop browsers / OS
@@ -70,52 +71,62 @@ const isPdf = target === 'pdf';
 
           <ul id="file-list" class="divide-y divide-[var(--color-rule)]"></ul>
 
-          <!-- Quality -->
+          <!-- Output format -->
           <div class="mt-6 rule pt-5">
+            <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">
+              Convert to
+            </div>
+            <div class="mt-2 grid grid-cols-4 gap-2" role="radiogroup" aria-label="Output format">
+              {formats.map((fmt) => (
+                <label class="cursor-pointer">
+                  <input type="radio" name="output" value={fmt} checked={fmt === defaultOutput} class="sr-only peer" />
+                  <span class="block text-center py-2 px-2 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">{fmt}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <!-- Quality -->
+          <div id="quality-block" class="mt-6 rule pt-5">
             <div class="flex items-center justify-between">
               <label for="quality" class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">
-                JPEG quality
+                Image quality
               </label>
               <span class="font-mono text-sm"><span id="quality-val">92</span>%</span>
             </div>
             <input id="quality" type="range" min="50" max="100" step="1" value="92" class="w-full mt-3 accent-[var(--color-emerald-dk)]" />
             <p class="mt-2 text-xs text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">
-              {isPdf
-                ? 'Each photo is embedded in the PDF as a JPEG at this quality. Higher = sharper pages, bigger PDF. 92% is the sweet spot.'
-                : 'Higher = bigger file, closer to the original. 92% is the Apple-friendly sweet spot.'}
+              Applies to JPG, WebP and PDF output. Higher = bigger file, closer to the original. 92% is a good sweet spot. PNG is lossless, so quality doesn't apply.
             </p>
           </div>
 
-          {isPdf && (
-            <div class="mt-6 rule pt-5 space-y-5">
-              <!-- PDF: combine into one document, or one PDF per photo -->
-              <label class="flex items-start gap-3 cursor-pointer">
-                <input id="combine-toggle" type="checkbox" checked class="mt-0.5 w-4 h-4 accent-[var(--color-emerald-dk)]" />
-                <span>
-                  <span class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Combine into one PDF</span>
-                  <span class="block mt-1 text-xs text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">On — every photo becomes a page in a single PDF. Off — each photo gets its own PDF (zipped if there's more than one).</span>
-                </span>
-              </label>
+          <!-- PDF options -->
+          <div id="pdf-options" class="mt-6 rule pt-5 space-y-5 hidden">
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input id="combine-toggle" type="checkbox" checked class="mt-0.5 w-4 h-4 accent-[var(--color-emerald-dk)]" />
+              <span>
+                <span class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Combine into one PDF</span>
+                <span class="block mt-1 text-xs text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">On — every image becomes a page in a single PDF. Off — each image gets its own PDF (zipped if there's more than one).</span>
+              </span>
+            </label>
 
-              <!-- PDF: page sizing -->
-              <div>
-                <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Page size</div>
-                <div class="mt-2 flex gap-2" role="radiogroup" aria-label="Page size">
-                  <label class="flex-1 cursor-pointer">
-                    <input type="radio" name="pagesize" value="photo" checked class="sr-only peer" />
-                    <span class="block text-center py-2 px-3 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">Photo-sized</span>
-                  </label>
-                  <label class="flex-1 cursor-pointer">
-                    <input type="radio" name="pagesize" value="a4" class="sr-only peer" />
-                    <span class="block text-center py-2 px-3 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">A4</span>
-                  </label>
-                </div>
-                <p class="mt-2 text-xs text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">
-                  Photo-sized — each page is exactly the photo, no whitespace. A4 — photos centered on standard pages, ready to print.
-                </p>
+            <div>
+              <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Page size</div>
+              <div class="mt-2 flex gap-2" role="radiogroup" aria-label="Page size">
+                <label class="flex-1 cursor-pointer">
+                  <input type="radio" name="pagesize" value="photo" checked class="sr-only peer" />
+                  <span class="block text-center py-2 px-3 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">Photo-sized</span>
+                </label>
+                <label class="flex-1 cursor-pointer">
+                  <input type="radio" name="pagesize" value="a4" class="sr-only peer" />
+                  <span class="block text-center py-2 px-3 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">A4</span>
+                </label>
               </div>
+              <p class="mt-2 text-xs text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">
+                Photo-sized — each page is exactly the image, no whitespace. A4 — images centered on standard pages, ready to print.
+              </p>
             </div>
-          )}
+          </div>
 
           <!-- Action bar -->
           <div class="mt-6 flex flex-wrap items-center justify-between gap-4 rule pt-5">
@@ -125,10 +136,6 @@ const isPdf = target === 'pdf';
                 <span id="progress-num">0%</span>
               </div>
               <div class="bar"><span id="progress-bar" style="width:0%"></span></div>
-              <!-- Source vs Output, mirroring the DontTouchMyVid action bar.
-                   Source is the running total of the queued HEIC sizes;
-                   Output is "—" until conversion finishes, then flips to
-                   the total output size. The percent saved sits below. -->
               <div class="mt-3 grid grid-cols-[1fr_auto_1fr] gap-2 sm:gap-4 items-center">
                 <div class="min-w-0">
                   <div class="kicker text-[10px]">Source</div>
@@ -158,18 +165,16 @@ const isPdf = target === 'pdf';
         <div class="section-num">Local runtime</div>
         <h3 class="font-display text-[22px] mt-1 leading-tight">What's running?</h3>
         <ul class="mt-3 text-sm space-y-2 font-mono">
-          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Decoder</span><span>libheif (WASM)</span></li>
-          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Encoder</span><span>{isPdf ? 'Canvas → JPEG → PDF' : 'Canvas → JPEG'}</span></li>
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Decoder</span><span>Canvas 2D / libheif</span></li>
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Encoder</span><span id="encoder-line">Canvas → JPEG</span></li>
           <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Network</span><span class="text-[var(--color-emerald-dk)]">idle</span></li>
         </ul>
       </div>
-      <AdSlot position={isPdf ? 'heic-pdf-sidebar' : 'heic-sidebar'} size="300x250" />
+      <AdSlot position="convert-sidebar" size="300x250" />
       <div class="card-ink p-5">
         <div class="font-mono text-[11px] tracking-[0.2em] uppercase opacity-80">Good to know</div>
         <p class="mt-2 text-[15px] leading-relaxed">
-          {isPdf
-            ? 'Each photo is embedded as a clean JPEG inside the PDF — EXIF metadata (location, camera, timestamp) is stripped along the way, so the PDF carries no hidden GPS or camera data.'
-            : 'EXIF metadata (location, camera, timestamp) is stripped by default — the JPG comes out clean. If you need to keep the camera info but ditch the location, that\'s coming later.'}
+          Re-encoding the image <em class="font-display not-italic">strips EXIF metadata</em> — location, camera and timestamp — so your converted file comes out clean. Converting to JPG or PDF flattens any transparency onto a white background.
         </p>
       </div>
     </aside>
@@ -177,32 +182,30 @@ const isPdf = target === 'pdf';
 </section>
 
 <script>
-  import heic2any from 'heic2any';
   import JSZip from 'jszip';
   import { formatBytes, downloadBlob, stripExtension, todayStamp } from '../../lib/format.ts';
 
   type Status = 'ready' | 'converting' | 'done' | 'error';
+  type Output = 'jpg' | 'png' | 'webp' | 'pdf';
   type Item = {
     id: string;
     file: File;
     status: Status;
-    // Intermediate JPEG produced by heic2any. The deliverable for the JPG
-    // tool, and the thumbnail source + embed source for the PDF tool.
-    jpegBlob?: Blob;
-    jpegSize?: number;
-    // Per-file PDF, only set on the PDF tool when "combine" is off.
+    // Detected input format, e.g. 'heic', 'jpg', 'png' — shown on the badge
+    // and used to pick the decode path.
+    format: string;
+    // Canvas-encoded raster: the deliverable for jpg/png/webp output, and
+    // the embed source + thumbnail for pdf output (always a JPEG there).
+    rasterBlob?: Blob;
+    rasterSize?: number;
+    // Per-file PDF, only set when output is pdf and "combine" is off.
     pdfBlob?: Blob;
     pdfSize?: number;
     error?: string;
-    // Lazy-allocated object URL pointing at jpegBlob, used as the thumbnail
-    // src once the file is converted. Revoked when the item is removed or
-    // the list is cleared so the blob can be garbage-collected.
+    // Lazy-allocated object URL pointing at rasterBlob, used as the
+    // thumbnail src. Revoked when the item is removed or the list cleared.
     previewUrl?: string;
   };
-
-  const root        = document.getElementById('tool') as HTMLElement;
-  const TARGET      = root.dataset.target === 'pdf' ? 'pdf' : 'jpg';
-  const IS_PDF      = TARGET === 'pdf';
 
   const dropzone    = document.getElementById('dropzone') as HTMLDivElement;
   const input       = document.getElementById('file-input') as HTMLInputElement;
@@ -213,9 +216,12 @@ const isPdf = target === 'pdf';
   const chipSize    = document.getElementById('chip-size') as HTMLSpanElement;
   const addMoreBtn  = document.getElementById('add-more') as HTMLButtonElement;
   const clearBtn    = document.getElementById('clear-all') as HTMLButtonElement;
+  const qBlock      = document.getElementById('quality-block') as HTMLDivElement;
   const qSlider     = document.getElementById('quality') as HTMLInputElement;
   const qVal        = document.getElementById('quality-val') as HTMLSpanElement;
-  const combineEl   = document.getElementById('combine-toggle') as HTMLInputElement | null;
+  const pdfOptions  = document.getElementById('pdf-options') as HTMLDivElement;
+  const combineEl   = document.getElementById('combine-toggle') as HTMLInputElement;
+  const encoderLine = document.getElementById('encoder-line') as HTMLSpanElement;
   const convertBtn  = document.getElementById('convert-btn') as HTMLButtonElement;
   const progBar     = document.getElementById('progress-bar') as HTMLSpanElement;
   const progNum     = document.getElementById('progress-num') as HTMLSpanElement;
@@ -235,6 +241,11 @@ const isPdf = target === 'pdf';
   let combineForStats = false;
   let combinedOutSize = 0;
 
+  function readOutput(): Output {
+    const checked = document.querySelector('input[name="output"]:checked') as HTMLInputElement | null;
+    const v = checked?.value;
+    return v === 'png' || v === 'webp' || v === 'pdf' ? v : 'jpg';
+  }
   function readPageSize(): 'photo' | 'a4' {
     const checked = document.querySelector('input[name="pagesize"]:checked') as HTMLInputElement | null;
     return checked?.value === 'a4' ? 'a4' : 'photo';
@@ -253,31 +264,40 @@ const isPdf = target === 'pdf';
     progNum.textContent = `${Math.round(c)}%`;
     if (label) statusLabel.textContent = label;
   }
+
+  // ISO BMFF (HEIC/HEIF/AVIF) major brands.
   const HEIC_BRANDS = new Set([
     'heic','heix','heim','heis',
     'mif1','msf1',
     'hevc','hevx','hevm','hevs',
   ]);
 
-  function isHeicByMeta(f: File): boolean {
-    const name = f.name.toLowerCase();
-    if (name.endsWith('.heic') || name.endsWith('.heif')) return true;
-    const t = (f.type || '').toLowerCase();
-    return t === 'image/heic' || t === 'image/heif';
-  }
-
-  // ISO BMFF: bytes 4..8 spell 'ftyp', 8..12 are the major brand.
-  async function isHeicByMagic(f: File): Promise<boolean> {
+  // Magic-byte detector. Returns a short format key, or null if the file
+  // isn't a raster image we can decode.
+  async function detectImageFormat(f: File): Promise<string | null> {
     try {
       const buf = await f.slice(0, 32).arrayBuffer();
       const b = new Uint8Array(buf);
-      if (b.length < 12) return false;
+      if (b.length < 12) return null;
+      if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
+      if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'png';
+      if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'gif';
+      if (b[0] === 0x42 && b[1] === 0x4d) return 'bmp';
+      const riff = String.fromCharCode(b[0], b[1], b[2], b[3]);
+      const webp = String.fromCharCode(b[8], b[9], b[10], b[11]);
+      if (riff === 'RIFF' && webp === 'WEBP') return 'webp';
       const ftyp = String.fromCharCode(b[4], b[5], b[6], b[7]);
-      if (ftyp !== 'ftyp') return false;
-      const brand = String.fromCharCode(b[8], b[9], b[10], b[11]);
-      return HEIC_BRANDS.has(brand);
+      if (ftyp === 'ftyp') {
+        const brand = String.fromCharCode(b[8], b[9], b[10], b[11]);
+        if (HEIC_BRANDS.has(brand)) return 'heic';
+        if (brand === 'avif' || brand === 'avis') return 'avif';
+      }
+      // Fallback for files with no/short magic but a clear extension.
+      const name = f.name.toLowerCase();
+      if (name.endsWith('.heic') || name.endsWith('.heif')) return 'heic';
+      return null;
     } catch {
-      return false;
+      return null;
     }
   }
 
@@ -293,6 +313,21 @@ const isPdf = target === 'pdf';
     input.setAttribute('accept', 'image/*,.heic,.heif');
   }
 
+  // --- Output-format UI ---
+  function updateOutputUI() {
+    const out = readOutput();
+    qBlock.classList.toggle('hidden', out === 'png');
+    pdfOptions.classList.toggle('hidden', out !== 'pdf');
+    encoderLine.textContent =
+      out === 'pdf'  ? 'Canvas → JPEG → PDF' :
+      out === 'png'  ? 'Canvas → PNG' :
+      out === 'webp' ? 'Canvas → WebP' :
+                       'Canvas → JPEG';
+    render();
+  }
+  document.querySelectorAll('input[name="output"]').forEach((el) =>
+    el.addEventListener('change', updateOutputUI));
+
   function render() {
     if (items.length === 0) {
       panel.classList.add('hidden');
@@ -300,11 +335,12 @@ const isPdf = target === 'pdf';
     }
     panel.classList.remove('hidden');
 
+    const out = readOutput();
     const totalSize = items.reduce((acc, it) => acc + it.file.size, 0);
-    // Output total: JPG sums the JPEG sizes; PDF sums the per-file PDF sizes,
-    // except in combine mode where the single document's size is the total.
-    const totalOut = !IS_PDF
-      ? items.reduce((acc, it) => acc + (it.jpegSize ?? 0), 0)
+    // Output total: jpg/png/webp sum the raster sizes; pdf sums the per-file
+    // PDF sizes, except in combine mode where the single document is the total.
+    const totalOut = out !== 'pdf'
+      ? items.reduce((acc, it) => acc + (it.rasterSize ?? 0), 0)
       : combineForStats
         ? combinedOutSize
         : items.reduce((acc, it) => acc + (it.pdfSize ?? 0), 0);
@@ -332,21 +368,21 @@ const isPdf = target === 'pdf';
 
     listEl.innerHTML = '';
     for (const item of items) {
-      listEl.appendChild(renderItem(item));
+      listEl.appendChild(renderItem(item, out));
     }
 
     const anyReady = items.some((i) => i.status === 'ready');
     convertBtn.disabled = working || !anyReady;
   }
 
-  function renderItem(item: Item): HTMLLIElement {
+  function renderItem(item: Item, out: Output): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'py-3 flex items-center gap-3 min-w-0';
 
     const badge = document.createElement('span');
     badge.className = 'shrink-0 w-10 h-12 border border-[var(--color-rule)] rounded-sm overflow-hidden flex items-center justify-center font-mono text-[10px] tracking-[0.1em] bg-[var(--color-paper)]';
-    if (item.status === 'done' && item.jpegBlob) {
-      if (!item.previewUrl) item.previewUrl = URL.createObjectURL(item.jpegBlob);
+    if (item.status === 'done' && item.rasterBlob) {
+      if (!item.previewUrl) item.previewUrl = URL.createObjectURL(item.rasterBlob);
       const img = document.createElement('img');
       img.src = item.previewUrl;
       img.alt = '';
@@ -355,7 +391,7 @@ const isPdf = target === 'pdf';
       img.className = 'w-full h-full object-cover';
       badge.appendChild(img);
     } else {
-      badge.textContent = 'HEIC';
+      badge.textContent = item.format.toUpperCase();
     }
     li.appendChild(badge);
 
@@ -369,7 +405,7 @@ const isPdf = target === 'pdf';
     let metaText = formatBytes(item.file.size);
     if (item.status === 'converting') metaText += ' · converting…';
     else if (item.status === 'done') {
-      if (!IS_PDF) metaText += ` → ${formatBytes(item.jpegSize ?? 0)} · converted`;
+      if (out !== 'pdf') metaText += ` → ${formatBytes(item.rasterSize ?? 0)} · ${out.toUpperCase()}`;
       else if (item.pdfSize != null) metaText += ` → ${formatBytes(item.pdfSize)} · PDF`;
       else metaText += ' · added to PDF';
     }
@@ -409,34 +445,25 @@ const isPdf = target === 'pdf';
     const arr = Array.from(files);
     let accepted = 0;
     let rejected = 0;
-    let iosConverted = 0;
     for (const f of arr) {
-      let ok = isHeicByMeta(f);
-      if (!ok) ok = await isHeicByMagic(f);
-      if (ok) {
-        items.push({ id: crypto.randomUUID(), file: f, status: 'ready' });
+      const fmt = await detectImageFormat(f);
+      if (fmt) {
+        items.push({ id: crypto.randomUUID(), file: f, status: 'ready', format: fmt });
         accepted++;
-        continue;
+      } else {
+        rejected++;
       }
-      rejected++;
-      const t = (f.type || '').toLowerCase();
-      if (IS_IOS && (t === 'image/jpeg' || t === 'image/png')) iosConverted++;
     }
     if (accepted === 0 && rejected > 0) {
-      if (iosConverted > 0) {
-        showErr('iPhone converted that to JPG before upload — it\'s already what this tool would output. To keep the original HEIC, share via the Files app, or set Settings → Photos → Transfer to "Keep Originals".', true);
-      } else {
-        showErr('Only HEIC and HEIF files are accepted here.');
-      }
+      showErr('No supported images there — drop HEIC, JPG, PNG, WebP, GIF or BMP files.');
     } else if (rejected > 0) {
-      showErr(`${rejected} file${rejected === 1 ? '' : 's'} skipped — not HEIC/HEIF.`);
+      showErr(`${rejected} file${rejected === 1 ? '' : 's'} skipped — not a supported image.`);
     }
     render();
 
-    // After a successful add, make sure the Convert & Download button is in
-    // view. On phones the file panel + convert button live below the fold,
-    // and users were dropping a file then wondering what to do next.
-    // requestAnimationFrame waits for layout after the panel un-hides.
+    // After a successful add, make sure the Convert button is in view. On
+    // phones the file panel + convert button live below the fold, and users
+    // were dropping a file then wondering what to do next.
     if (accepted > 0) {
       requestAnimationFrame(() => {
         const rect = convertBtn.getBoundingClientRect();
@@ -470,11 +497,9 @@ const isPdf = target === 'pdf';
   }
 
   addMoreBtn.addEventListener('click', () => {
-    // If the previous batch has already finished (any item done or errored
-    // and we're not still converting), treat "Add more" as starting fresh:
-    // clear the list, reset the action bar, then open the picker. Otherwise
-    // Source/Output sums would straddle the old batch and the read-out
-    // gets confusing.
+    // If the previous batch has already finished, treat "Add more" as
+    // starting fresh: clear the list and reset the action bar, then open the
+    // picker. Otherwise Source/Output sums would straddle the old batch.
     const finished = !working && items.some((i) => i.status === 'done' || i.status === 'error');
     if (finished) resetBatch();
     input.click();
@@ -507,15 +532,38 @@ const isPdf = target === 'pdf';
   // --- Quality slider ---
   qSlider.addEventListener('input', () => { qVal.textContent = qSlider.value; });
 
-  // Read the pixel dimensions of a JPEG blob — needed to size PDF pages.
-  function imageSize(blob: Blob): Promise<{ w: number; h: number }> {
-    return new Promise((resolve, reject) => {
-      const url = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = () => { URL.revokeObjectURL(url); resolve({ w: img.naturalWidth, h: img.naturalHeight }); };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('could not read image')); };
-      img.src = url;
-    });
+  // --- Decode / encode pipeline ---
+  // Decode any input file to an ImageBitmap. HEIC/HEIF route through
+  // heic2any (lazily imported so non-HEIC use never loads the WASM); a
+  // lossless PNG is used as the transport blob to avoid double-lossy
+  // re-encoding. Everything else decodes via the browser directly.
+  async function decodeToBitmap(item: Item): Promise<ImageBitmap> {
+    if (item.format === 'heic' || item.format === 'heif') {
+      const { default: heic2any } = await import('heic2any');
+      const result = await heic2any({ blob: item.file, toType: 'image/png' });
+      const blob: Blob = Array.isArray(result) ? result[0] : result;
+      return await createImageBitmap(blob);
+    }
+    return await createImageBitmap(item.file, { imageOrientation: 'from-image' });
+  }
+
+  // Re-encode a bitmap to the chosen raster format. JPEG/PDF get a white
+  // background fill so any transparency is flattened rather than turned black.
+  async function encodeRaster(bitmap: ImageBitmap, out: Output, quality: number): Promise<Blob> {
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('canvas unavailable');
+    if (out === 'jpg' || out === 'pdf') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    ctx.drawImage(bitmap, 0, 0);
+    const mime = out === 'png' ? 'image/png' : out === 'webp' ? 'image/webp' : 'image/jpeg';
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, mime, quality));
+    if (!blob) throw new Error('could not encode');
+    return blob;
   }
 
   // A4 in PDF points (72 dpi): 595.28 × 841.89.
@@ -524,15 +572,11 @@ const isPdf = target === 'pdf';
   const A4_MARGIN = 24;
 
   // Embed one JPEG as a page in the given PDFDocument.
-  async function addJpegPage(
-    pdf: any,
-    jpegBlob: Blob,
-    pageSize: 'photo' | 'a4',
-  ) {
+  async function addJpegPage(pdf: any, jpegBlob: Blob, pageSize: 'photo' | 'a4') {
     const bytes = new Uint8Array(await jpegBlob.arrayBuffer());
     const img = await pdf.embedJpg(bytes);
     if (pageSize === 'a4') {
-      // Orient the page to match the photo so the fit is as large as possible.
+      // Orient the page to match the image so the fit is as large as possible.
       const landscape = img.width > img.height;
       const pw = landscape ? A4_LONG : A4_SHORT;
       const ph = landscape ? A4_SHORT : A4_LONG;
@@ -549,7 +593,7 @@ const isPdf = target === 'pdf';
     }
   }
 
-  // Dedupe output names defensively: "IMG.pdf", "IMG (2).pdf", …
+  // Dedupe output names defensively: "IMG.jpg", "IMG (2).jpg", …
   function uniqueName(base: string, ext: string, seen: Set<string>): string {
     let name = `${base}.${ext}`;
     let n = 2;
@@ -565,17 +609,18 @@ const isPdf = target === 'pdf';
 
     working = true;
     convertBtn.disabled = true;
+    const out = readOutput();
     const quality = Math.max(50, Math.min(100, +qSlider.value)) / 100;
-    const combine = IS_PDF && !!combineEl?.checked;
-    const pageSize = IS_PDF ? readPageSize() : 'photo';
+    const combine = out === 'pdf' && !!combineEl.checked;
+    const pageSize = out === 'pdf' ? readPageSize() : 'photo';
     combineForStats = combine;
     combinedOutSize = 0;
 
     setProgress(1, `Converting 1 of ${toProcess.length}`);
 
-    // Phase 1 — decode every HEIC to a JPEG. On the PDF tool with combine
-    // off, each file's single-page PDF is also built here so the Output
-    // stat ticks up live; with combine on the document is assembled after.
+    // Phase 1 — decode + re-encode every file. With pdf output and combine
+    // off, each file's single-page PDF is also built here so the Output stat
+    // ticks up live; with combine on the document is assembled afterwards.
     for (let i = 0; i < toProcess.length; i++) {
       const item = toProcess[i];
       item.status = 'converting';
@@ -583,19 +628,16 @@ const isPdf = target === 'pdf';
       setProgress(((i) / toProcess.length) * 88 + 2, `Converting ${i + 1} of ${toProcess.length}`);
 
       try {
-        const result = await heic2any({
-          blob: item.file,
-          toType: 'image/jpeg',
-          quality,
-        });
-        const blob: Blob = Array.isArray(result) ? result[0] : result;
-        item.jpegBlob = blob;
-        item.jpegSize = blob.size;
+        const bitmap = await decodeToBitmap(item);
+        const raster = await encodeRaster(bitmap, out, quality);
+        bitmap.close();
+        item.rasterBlob = raster;
+        item.rasterSize = raster.size;
 
-        if (IS_PDF && !combine) {
+        if (out === 'pdf' && !combine) {
           const { PDFDocument } = await import('pdf-lib');
           const pdf = await PDFDocument.create();
-          await addJpegPage(pdf, blob, pageSize);
+          await addJpegPage(pdf, raster, pageSize);
           const pdfBytes = await pdf.save();
           item.pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
           item.pdfSize = item.pdfBlob.size;
@@ -605,14 +647,14 @@ const isPdf = target === 'pdf';
       } catch (err) {
         console.error(err);
         item.status = 'error';
-        item.error  = (err as Error).message || 'could not decode';
+        item.error  = (err as Error).message || 'could not convert';
       }
       render();
     }
 
-    const done = items.filter((i) => i.status === 'done' && i.jpegBlob);
+    const done = items.filter((i) => i.status === 'done' && i.rasterBlob);
     if (done.length === 0) {
-      showErr('No files could be converted. They may not be valid HEIC images.');
+      showErr('No files could be converted. They may be corrupt or in an unsupported format.');
       setProgress(0, 'Idle');
       working = false;
       render();
@@ -622,23 +664,23 @@ const isPdf = target === 'pdf';
     setProgress(94, 'Packaging');
 
     try {
-      if (IS_PDF && combine) {
-        // Phase 2 — one document, one page per photo.
+      if (out === 'pdf' && combine) {
+        // Phase 2 — one document, one page per image.
         const { PDFDocument } = await import('pdf-lib');
         const pdf = await PDFDocument.create();
         for (const item of done) {
-          await addJpegPage(pdf, item.jpegBlob!, pageSize);
+          await addJpegPage(pdf, item.rasterBlob!, pageSize);
         }
         const pdfBytes = await pdf.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         combinedOutSize = blob.size;
         const name = done.length === 1
           ? `${stripExtension(done[0].file.name)}.pdf`
-          : `dtmp-heic-to-pdf-${todayStamp()}.pdf`;
+          : `dtmp-convert-${todayStamp()}.pdf`;
         downloadBlob(blob, name);
         setProgress(100, `Done · 1 PDF · ${done.length} page${done.length === 1 ? '' : 's'}`);
-      } else if (IS_PDF) {
-        // One PDF per photo, built in phase 1; download or zip them.
+      } else if (out === 'pdf') {
+        // One PDF per image, built in phase 1; download or zip them.
         if (done.length === 1) {
           downloadBlob(done[0].pdfBlob!, `${stripExtension(done[0].file.name)}.pdf`);
           setProgress(100, 'Done · 1 PDF');
@@ -649,22 +691,23 @@ const isPdf = target === 'pdf';
             zip.file(uniqueName(stripExtension(item.file.name), 'pdf', names), item.pdfBlob!);
           }
           const zipBlob = await zip.generateAsync({ type: 'blob' });
-          downloadBlob(zipBlob, `dtmp-heic-to-pdf-${todayStamp()}.zip`);
+          downloadBlob(zipBlob, `dtmp-convert-${todayStamp()}.zip`);
           setProgress(100, `Done · ${done.length} PDFs`);
         }
       } else {
-        // JPG tool: the JPEG is the deliverable.
+        // Raster output: the re-encoded image is the deliverable.
+        const ext = out;
         if (done.length === 1) {
-          downloadBlob(done[0].jpegBlob!, `${stripExtension(done[0].file.name)}.jpg`);
+          downloadBlob(done[0].rasterBlob!, `${stripExtension(done[0].file.name)}.${ext}`);
           setProgress(100, 'Done · 1 file');
         } else {
           const zip = new JSZip();
           const names = new Set<string>();
           for (const item of done) {
-            zip.file(uniqueName(stripExtension(item.file.name), 'jpg', names), item.jpegBlob!);
+            zip.file(uniqueName(stripExtension(item.file.name), ext, names), item.rasterBlob!);
           }
           const zipBlob = await zip.generateAsync({ type: 'blob' });
-          downloadBlob(zipBlob, `dtmp-heic-to-jpg-${todayStamp()}.zip`);
+          downloadBlob(zipBlob, `dtmp-convert-${todayStamp()}.zip`);
           setProgress(100, `Done · ${done.length} files`);
         }
       }
@@ -678,4 +721,7 @@ const isPdf = target === 'pdf';
     setTimeout(() => setProgress(0, 'Idle'), 1800);
     render();
   });
+
+  // Initialise output-dependent UI on load.
+  updateOutputUI();
 </script>

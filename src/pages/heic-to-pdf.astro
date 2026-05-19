@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ToolHeader from '../components/ToolHeader.astro';
-import HeicConvertTool from '../components/tools/HeicConvertTool.astro';
+import ConvertTool from '../components/tools/ConvertTool.astro';
 import HowItWorks from '../components/HowItWorks.astro';
 import Faq from '../components/Faq.astro';
 import RelatedTools from '../components/RelatedTools.astro';
@@ -60,7 +60,7 @@ const sd = [
     <svg slot="icon" viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M9 13h6M9 17h4"/></svg>
   </ToolHeader>
 
-  <HeicConvertTool target="pdf" />
+  <ConvertTool defaultOutput="pdf" />
 
   <!-- When you'd want this -->
   <section class="mx-auto max-w-[1320px] px-5 sm:px-8 py-20 border-t border-[var(--color-rule)]">

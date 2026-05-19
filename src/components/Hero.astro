@@ -2,6 +2,7 @@
 import { GITHUB_REPO } from '../lib/constants';
 
 const tools = [
+  { href: '/convert',     label: 'Convert' },
   { href: '/heic-to-jpg', label: 'HEIC → JPG' },
   { href: '/heic-to-pdf', label: 'HEIC → PDF' },
 ];
@@ -42,8 +43,8 @@ const tools = [
         </p>
 
         <div class="mt-9 flex flex-wrap items-center gap-3 rise rise-d3">
-          <a href="/heic-to-jpg" class="btn btn-primary">
-            Convert HEIC
+          <a href="/convert" class="btn btn-primary">
+            Convert images
             <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           </a>
           <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer" class="btn btn-ghost">
