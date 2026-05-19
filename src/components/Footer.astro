@@ -1,5 +1,6 @@
 ---
 import { GITHUB_REPO, SITE_NAME } from '../lib/constants';
+import pkg from '../../package.json';
 
 // Build stamp baked into the static HTML at build time. Lets us see at a
 // glance which deploy a browser is showing — handy when chasing whether a
@@ -117,7 +118,7 @@ const marqueePhrases = [
   <div class="border-t border-[var(--color-rule)]">
     <div class="mx-auto max-w-[1320px] px-5 sm:px-8 py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-mono text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">
       <span>© {year} {SITE_NAME}.</span>
-      <span class="tracking-[0.18em] uppercase">v0.1.0 · build {buildId} · donttouchmypic.com</span>
+      <span class="tracking-[0.18em] uppercase">v{pkg.version} · build {buildId} · donttouchmypic.com</span>
     </div>
   </div>
 </footer>
