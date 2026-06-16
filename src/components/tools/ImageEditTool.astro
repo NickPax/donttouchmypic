@@ -631,7 +631,7 @@ const action = isCrop ? 'Crop & download' : 'Rotate & download';
       selectedId = items[0].id;
       render();
       await selectItem(selectedId);
-      requestAnimationFrame(() => exportBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+      requestAnimationFrame(centerPreviewInViewport);
     }
   }
 
@@ -680,6 +680,11 @@ const action = isCrop ? 'Crop & download' : 'Rotate & download';
   });
 
   qSlider.addEventListener('input', () => { qVal.textContent = qSlider.value; });
+  function centerPreviewInViewport() {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    canvasShell.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+  }
+
   document.querySelectorAll('input[name="aspect"]').forEach((el) => el.addEventListener('change', () => {
     fitCropToAspect();
     snapCropToEdges('nwse');
