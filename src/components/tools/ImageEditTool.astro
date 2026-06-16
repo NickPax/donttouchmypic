@@ -977,6 +977,32 @@ const action = isCrop ? 'Crop & download' : 'Rotate & download';
     const yBand = widestDenseBand(smoothRows, rowCut, Math.round(height * 0.08));
     if (!yBand) return null;
 
+    const transition = new Float32Array(width);
+    for (let x = 1; x < width; x++) {
+      let count = 0;
+      for (let y = yBand.start; y <= yBand.end; y++) {
+        count += Math.abs(mask[y * width + x] - mask[y * width + x - 1]);
+      }
+      transition[x] = count / (yBand.end - yBand.start + 1);
+    }
+    const smoothTransition = smooth(transition, Math.max(2, Math.round(width * 0.006)));
+    const transitionCut = Math.max(0.045, percentile(smoothTransition, 0.88) * 0.52);
+    let edgeLeft = -1;
+    let edgeRight = -1;
+    const edgeInset = Math.round(width * 0.018);
+    for (let x = edgeInset; x < width - edgeInset; x++) {
+      if (smoothTransition[x] >= transitionCut) {
+        edgeLeft = x;
+        break;
+      }
+    }
+    for (let x = width - edgeInset - 1; x > edgeInset; x--) {
+      if (smoothTransition[x] >= transitionCut) {
+        edgeRight = x;
+        break;
+      }
+    }
+
     const col = new Float32Array(width);
     for (let x = 0; x < width; x++) {
       let count = 0;
@@ -988,6 +1014,17 @@ const action = isCrop ? 'Crop & download' : 'Rotate & download';
     const colCut = Math.max(0.045, percentile(smoothCols, 0.66) * 0.55);
     const xBand = widestDenseBand(smoothCols, colCut, Math.round(width * 0.12));
     if (!xBand) return null;
+
+    if (edgeLeft >= 0 && edgeRight > edgeLeft && edgeRight - edgeLeft > width * 0.18) {
+      const projectedLeft = xBand.start;
+      const projectedRight = xBand.end;
+      const leftIsPlausible = edgeLeft <= projectedLeft + width * 0.12;
+      const rightIsPlausible = edgeRight >= projectedRight - width * 0.12;
+      if (leftIsPlausible) xBand.start = Math.max(0, Math.min(xBand.start, edgeLeft));
+      if (rightIsPlausible) xBand.end = Math.min(width - 1, Math.max(xBand.end, edgeRight));
+    }
+
+    trimBandEdges(smoothCols, xBand, Math.max(colCut * 0.72, 0.028));
 
     const padX = Math.round(width * 0.018);
     const padY = Math.round(height * 0.018);
@@ -1004,6 +1041,28 @@ const action = isCrop ? 'Crop & download' : 'Rotate & download';
     if (out.w < 0.12 || out.h < 0.08) return null;
     if (out.w > 0.985 && out.h > 0.985) return null;
     return out;
+  }
+
+  function trimBandEdges(values: Float32Array, band: { start: number; end: number }, cut: number) {
+    const maxWeakRun = Math.max(3, Math.round(values.length * 0.018));
+    let weak = 0;
+    for (let x = band.start; x <= band.end; x++) {
+      if (values[x] >= cut) {
+        if (weak > 0 && weak <= maxWeakRun) break;
+        if (weak > maxWeakRun) band.start = x;
+        break;
+      }
+      weak++;
+    }
+    weak = 0;
+    for (let x = band.end; x >= band.start; x--) {
+      if (values[x] >= cut) {
+        if (weak > 0 && weak <= maxWeakRun) break;
+        if (weak > maxWeakRun) band.end = x;
+        break;
+      }
+      weak++;
+    }
   }
 
   function smooth(values: Float32Array, radius: number): Float32Array {
