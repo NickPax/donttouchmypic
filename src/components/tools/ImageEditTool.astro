@@ -1,0 +1,678 @@
+---
+// Client-side Crop / Rotate editor. Shared because both tools need the same
+// local image intake, HEIC decode, Canvas export, and ZIP packaging.
+import AdSlot from '../AdSlot.astro';
+
+type Props = { mode: 'crop' | 'rotate' };
+const { mode } = Astro.props;
+const isCrop = mode === 'crop';
+const title = isCrop ? 'Drop one image here.' : 'Drop images here.';
+const subcopy = isCrop
+  ? 'Crop one photo at a time with draggable handles. HEIC, JPG, PNG, WebP, GIF & more.'
+  : 'Rotate, straighten or flip one image — or apply the same turn to a whole batch.';
+const action = isCrop ? 'Crop & download' : 'Rotate & download';
+---
+<section id="tool" data-mode={mode} class="mx-auto max-w-[1320px] px-5 sm:px-8 pt-10 pb-16">
+  <div class="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8">
+    <div>
+      <div
+        id="dropzone"
+        class="drop-target relative rounded-sm p-10 md:p-14 text-center cursor-pointer"
+        role="button"
+        tabindex="0"
+        aria-label={isCrop ? 'Drop an image here, or click to browse' : 'Drop images here, or click to browse'}
+      >
+        <div class="scanline rounded-sm" data-scanline hidden></div>
+        <div class="relative">
+          <div class="mx-auto w-14 h-14 inline-flex items-center justify-center rounded-sm bg-[var(--color-emerald-lt)] text-[var(--color-emerald-dk)]">
+            {isCrop ? (
+              <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3v4M7 7H3M17 17v4M17 17h4M7 7h10v10H7z"/></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+            )}
+          </div>
+          <h2 class="mt-5 display-3">{title}</h2>
+          <p class="mt-2 text-sm text-[color-mix(in_srgb,var(--color-ink)_75%,transparent)]">
+            Drag straight from a file window — or <button type="button" id="browse" class="underline decoration-[var(--color-emerald-dk)] decoration-2 underline-offset-4">browse</button>.
+            {subcopy}
+          </p>
+        </div>
+        <input id="file-input" type="file" multiple={!isCrop} class="sr-only" />
+      </div>
+
+      <div id="file-panel" class="mt-6 hidden">
+        <div class="card p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="chip chip-ink" id="chip-count">0 files</span>
+              <span class="chip" id="chip-size">0 B</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="add-more" class="btn btn-ghost !py-2 !px-3">{isCrop ? 'Replace image' : 'Add more'}</button>
+              <button type="button" id="clear-all" class="btn btn-ghost !py-2 !px-3">Clear</button>
+            </div>
+          </div>
+
+          <div class="grid xl:grid-cols-[minmax(0,1fr)_290px] gap-5 items-start">
+            <div class="min-w-0">
+              <div id="canvas-shell" class="relative overflow-auto rounded-sm border border-[var(--color-rule)] bg-[var(--color-paper-2)] min-h-[280px] flex items-center justify-center p-3">
+                <div id="canvas-wrap" class="relative inline-block max-w-full">
+                  <canvas id="preview-canvas" class="block max-w-full max-h-[68vh] bg-[var(--color-paper)]"></canvas>
+                  {isCrop && (
+                    <div id="crop-box" class="absolute border-2 border-[var(--color-emerald)] bg-[color-mix(in_srgb,var(--color-emerald)_14%,transparent)] shadow-[0_0_0_9999px_rgba(0,0,0,0.28)] cursor-move hidden">
+                      {['nw','ne','sw','se'].map((h) => (
+                        <span data-handle={h} class:list={[
+                          'absolute w-4 h-4 bg-[var(--color-paper)] border-2 border-[var(--color-emerald)] rounded-full',
+                          h === 'nw' && '-left-2 -top-2 cursor-nwse-resize',
+                          h === 'ne' && '-right-2 -top-2 cursor-nesw-resize',
+                          h === 'sw' && '-left-2 -bottom-2 cursor-nesw-resize',
+                          h === 'se' && '-right-2 -bottom-2 cursor-nwse-resize',
+                        ]}></span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <p id="hint" class="mt-2 text-xs text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">
+                {isCrop ? 'Drag the crop frame or pull a corner handle. Export uses the original pixels, not the preview size.' : 'The same rotation settings apply to every selected image when you download a batch.'}
+              </p>
+            </div>
+
+            <div class="space-y-5">
+              <ul id="file-list" class="divide-y divide-[var(--color-rule)] max-h-[260px] overflow-auto border border-[var(--color-rule)] rounded-sm"></ul>
+
+              {isCrop ? (
+                <div class="rule pt-5">
+                  <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Crop shape</div>
+                  <div class="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Crop aspect ratio">
+                    {[
+                      ['free', 'Free'],
+                      ['1:1', 'Square'],
+                      ['4:3', '4:3'],
+                      ['16:9', '16:9'],
+                    ].map(([value, label]) => (
+                      <label class="cursor-pointer">
+                        <input type="radio" name="aspect" value={value} checked={value === 'free'} class="sr-only peer" />
+                        <span class="block text-center py-2 px-2 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div class="rule pt-5 space-y-4">
+                  <div>
+                    <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Quick turns</div>
+                    <div class="mt-2 grid grid-cols-2 gap-2">
+                      <button type="button" id="turn-left" class="btn btn-ghost !justify-center !py-2 !px-3">Left 90°</button>
+                      <button type="button" id="turn-right" class="btn btn-ghost !justify-center !py-2 !px-3">Right 90°</button>
+                      <button type="button" id="flip-x" class="btn btn-ghost !justify-center !py-2 !px-3">Flip H</button>
+                      <button type="button" id="flip-y" class="btn btn-ghost !justify-center !py-2 !px-3">Flip V</button>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="flex items-center justify-between">
+                      <label for="angle" class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Straighten</label>
+                      <span class="font-mono text-sm"><span id="angle-val">0</span>°</span>
+                    </div>
+                    <input id="angle" type="range" min="-45" max="45" step="1" value="0" class="w-full mt-3 accent-[var(--color-emerald-dk)]" />
+                  </div>
+                  <button type="button" id="reset-transform" class="btn btn-ghost w-full !justify-center !py-2 !px-3">Reset</button>
+                </div>
+              )}
+
+              <div class="rule pt-5">
+                <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Save as</div>
+                <div class="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Output format">
+                  {['jpg', 'png', 'webp'].map((fmt) => (
+                    <label class="cursor-pointer">
+                      <input type="radio" name="output" value={fmt} checked={fmt === 'jpg'} class="sr-only peer" />
+                      <span class="block text-center py-2 px-2 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">{fmt}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div id="quality-block" class="rule pt-5">
+                <div class="flex items-center justify-between">
+                  <label for="quality" class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Image quality</label>
+                  <span class="font-mono text-sm"><span id="quality-val">92</span>%</span>
+                </div>
+                <input id="quality" type="range" min="50" max="100" step="1" value="92" class="w-full mt-3 accent-[var(--color-emerald-dk)]" />
+              </div>
+
+              <button id="export-btn" class="btn btn-primary w-full justify-center" disabled>
+                {action}
+                <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v14M6 11l6 6 6-6M5 21h14"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-6 rule pt-5">
+            <div class="flex items-center justify-between mb-1.5 font-mono text-[11px] tracking-[0.12em] uppercase text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">
+              <span id="status-label">Idle</span>
+              <span id="progress-num">0%</span>
+            </div>
+            <div class="bar"><span id="progress-bar" style="width:0%"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="err" role="alert" class="mt-6 hidden border border-[var(--color-red-stamp)] bg-[var(--color-red-stamp-bg)] text-[var(--color-red-stamp)] font-mono text-xs uppercase tracking-[0.14em] p-3 rounded-sm"></div>
+    </div>
+
+    <aside class="space-y-5">
+      <div class="card p-5">
+        <div class="section-num">Local runtime</div>
+        <h3 class="font-display text-[22px] mt-1 leading-tight">What's running?</h3>
+        <ul class="mt-3 text-sm space-y-2 font-mono">
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Decoder</span><span>Canvas 2D / libheif</span></li>
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Editor</span><span>{isCrop ? 'Crop frame' : 'Transform matrix'}</span></li>
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Network</span><span class="text-[var(--color-emerald-dk)]">idle</span></li>
+        </ul>
+      </div>
+      <AdSlot position={`${mode}-sidebar`} size="300x250" />
+      <div class="card-ink p-5">
+        <div class="font-mono text-[11px] tracking-[0.2em] uppercase opacity-80">Good to know</div>
+        <p class="mt-2 text-[15px] leading-relaxed">
+          Exporting creates a fresh file and strips EXIF metadata by default. JPG output flattens transparency onto white; PNG and WebP keep it where the browser can.
+        </p>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<script>
+  import JSZip from 'jszip';
+  import { formatBytes, downloadBlob, stripExtension, todayStamp } from '../../lib/format.ts';
+
+  type Item = {
+    id: string;
+    file: File;
+    format: string;
+    status: 'ready' | 'loading' | 'done' | 'error';
+    source?: HTMLCanvasElement;
+    error?: string;
+  };
+  type Output = 'jpg' | 'png' | 'webp';
+
+  const tool = document.getElementById('tool') as HTMLElement;
+  const mode = tool.dataset.mode === 'rotate' ? 'rotate' : 'crop';
+  const isCrop = mode === 'crop';
+  const dropzone = document.getElementById('dropzone') as HTMLDivElement;
+  const input = document.getElementById('file-input') as HTMLInputElement;
+  const browse = document.getElementById('browse') as HTMLButtonElement;
+  const panel = document.getElementById('file-panel') as HTMLDivElement;
+  const addMoreBtn = document.getElementById('add-more') as HTMLButtonElement;
+  const clearBtn = document.getElementById('clear-all') as HTMLButtonElement;
+  const chipCount = document.getElementById('chip-count') as HTMLSpanElement;
+  const chipSize = document.getElementById('chip-size') as HTMLSpanElement;
+  const listEl = document.getElementById('file-list') as HTMLUListElement;
+  const preview = document.getElementById('preview-canvas') as HTMLCanvasElement;
+  const wrap = document.getElementById('canvas-wrap') as HTMLDivElement;
+  const cropEl = document.getElementById('crop-box') as HTMLDivElement | null;
+  const qBlock = document.getElementById('quality-block') as HTMLDivElement;
+  const qSlider = document.getElementById('quality') as HTMLInputElement;
+  const qVal = document.getElementById('quality-val') as HTMLSpanElement;
+  const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
+  const progBar = document.getElementById('progress-bar') as HTMLSpanElement;
+  const progNum = document.getElementById('progress-num') as HTMLSpanElement;
+  const statusLabel = document.getElementById('status-label') as HTMLSpanElement;
+  const errEl = document.getElementById('err') as HTMLDivElement;
+  const scan = dropzone.querySelector('[data-scanline]') as HTMLDivElement;
+  const angleSlider = document.getElementById('angle') as HTMLInputElement | null;
+  const angleVal = document.getElementById('angle-val') as HTMLSpanElement | null;
+
+  const items: Item[] = [];
+  let selectedId = '';
+  let working = false;
+  let quarterAngle = 0;
+  let flipX = false;
+  let flipY = false;
+  let crop = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
+
+  const HEIC_BRANDS = new Set(['heic','heix','heim','heis','mif1','msf1','hevc','hevx','hevm','hevs']);
+
+  async function detectImageFormat(f: File): Promise<string | null> {
+    try {
+      const buf = await f.slice(0, 32).arrayBuffer();
+      const b = new Uint8Array(buf);
+      if (b.length < 12) return null;
+      if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
+      if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'png';
+      if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'gif';
+      if (b[0] === 0x42 && b[1] === 0x4d) return 'bmp';
+      if (String.fromCharCode(b[0], b[1], b[2], b[3]) === 'RIFF' && String.fromCharCode(b[8], b[9], b[10], b[11]) === 'WEBP') return 'webp';
+      if (String.fromCharCode(b[4], b[5], b[6], b[7]) === 'ftyp') {
+        const brand = String.fromCharCode(b[8], b[9], b[10], b[11]);
+        if (HEIC_BRANDS.has(brand)) return 'heic';
+        if (brand === 'avif' || brand === 'avis') return 'avif';
+      }
+      const name = f.name.toLowerCase();
+      if (name.endsWith('.heic') || name.endsWith('.heif')) return 'heic';
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function decodeToBitmap(item: Item): Promise<ImageBitmap> {
+    if (item.format === 'heic' || item.format === 'heif') {
+      const { default: heic2any } = await import('heic2any');
+      const result = await heic2any({ blob: item.file, toType: 'image/png' });
+      const blob: Blob = Array.isArray(result) ? result[0] : result;
+      return await createImageBitmap(blob);
+    }
+    return await createImageBitmap(item.file, { imageOrientation: 'from-image' });
+  }
+
+  async function loadItem(item: Item): Promise<HTMLCanvasElement> {
+    if (item.source) return item.source;
+    item.status = 'loading';
+    render();
+    const bitmap = await decodeToBitmap(item);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('canvas unavailable');
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    item.source = canvas;
+    item.status = 'ready';
+    render();
+    return canvas;
+  }
+
+  function selected(): Item | undefined {
+    return items.find((i) => i.id === selectedId) || items[0];
+  }
+
+  function readOutput(): Output {
+    const checked = document.querySelector('input[name="output"]:checked') as HTMLInputElement | null;
+    return checked?.value === 'png' || checked?.value === 'webp' ? checked.value : 'jpg';
+  }
+
+  function quality(): number {
+    return Math.max(50, Math.min(100, +qSlider.value)) / 100;
+  }
+
+  function setProgress(pct: number, label?: string) {
+    const c = Math.max(0, Math.min(100, pct));
+    progBar.style.width = `${c}%`;
+    progNum.textContent = `${Math.round(c)}%`;
+    if (label) statusLabel.textContent = label;
+  }
+
+  let errTimer: ReturnType<typeof setTimeout> | undefined;
+  function showErr(msg: string) {
+    if (errTimer) clearTimeout(errTimer);
+    errEl.textContent = msg;
+    errEl.classList.remove('hidden');
+    errTimer = setTimeout(() => errEl.classList.add('hidden'), 6500);
+  }
+
+  function updateOutputUI() {
+    qBlock.classList.toggle('hidden', readOutput() === 'png');
+  }
+  document.querySelectorAll('input[name="output"]').forEach((el) => el.addEventListener('change', updateOutputUI));
+
+  function render() {
+    panel.classList.toggle('hidden', items.length === 0);
+    const total = items.reduce((acc, item) => acc + item.file.size, 0);
+    chipCount.textContent = `${items.length} file${items.length === 1 ? '' : 's'}`;
+    chipSize.textContent = formatBytes(total);
+    exportBtn.disabled = working || items.length === 0;
+
+    listEl.innerHTML = '';
+    for (const item of items) {
+      const li = document.createElement('li');
+      li.className = 'p-3 flex items-center gap-3 min-w-0';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `min-w-0 flex-1 text-left rounded-sm p-1 ${item.id === selectedId ? 'bg-[var(--color-paper-2)]' : ''}`;
+      const name = document.createElement('div');
+      name.className = 'font-display text-[18px] truncate';
+      name.textContent = item.file.name;
+      const meta = document.createElement('div');
+      meta.className = 'font-mono text-[11px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]';
+      meta.textContent = `${item.format.toUpperCase()} · ${formatBytes(item.file.size)} · ${item.status}`;
+      button.appendChild(name);
+      button.appendChild(meta);
+      button.addEventListener('click', () => selectItem(item.id));
+      li.appendChild(button);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'w-8 h-8 inline-flex items-center justify-center border border-[var(--color-rule)] rounded-sm hover:bg-[var(--color-paper-2)]';
+      remove.setAttribute('aria-label', `Remove ${item.file.name}`);
+      remove.innerHTML = '<svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+      remove.addEventListener('click', () => {
+        const idx = items.findIndex((i) => i.id === item.id);
+        if (idx >= 0) items.splice(idx, 1);
+        if (selectedId === item.id) selectedId = items[0]?.id ?? '';
+        render();
+        drawPreview();
+      });
+      li.appendChild(remove);
+      listEl.appendChild(li);
+    }
+  }
+
+  async function selectItem(id: string) {
+    selectedId = id;
+    const item = selected();
+    if (!item) return;
+    try {
+      await loadItem(item);
+      if (isCrop) resetCrop();
+      await drawPreview();
+    } catch (err) {
+      console.error(err);
+      item.status = 'error';
+      item.error = (err as Error).message;
+      showErr('That image could not be decoded in this browser.');
+      render();
+    }
+  }
+
+  function resetCrop() {
+    crop = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
+    fitCropToAspect();
+    paintCropBox();
+  }
+
+  function aspectRatio(): number | null {
+    const checked = document.querySelector('input[name="aspect"]:checked') as HTMLInputElement | null;
+    if (!checked || checked.value === 'free') return null;
+    const [w, h] = checked.value.split(':').map(Number);
+    return w / h;
+  }
+
+  function fitCropToAspect() {
+    const ratio = aspectRatio();
+    if (!ratio) return;
+    let w = crop.w;
+    let h = w / ratio;
+    if (h > crop.h) {
+      h = crop.h;
+      w = h * ratio;
+    }
+    crop.x += (crop.w - w) / 2;
+    crop.y += (crop.h - h) / 2;
+    crop.w = w;
+    crop.h = h;
+    clampCrop();
+  }
+
+  function clampCrop() {
+    crop.w = Math.max(0.05, Math.min(1, crop.w));
+    crop.h = Math.max(0.05, Math.min(1, crop.h));
+    crop.x = Math.max(0, Math.min(1 - crop.w, crop.x));
+    crop.y = Math.max(0, Math.min(1 - crop.h, crop.y));
+  }
+
+  function paintCropBox() {
+    if (!cropEl) return;
+    cropEl.classList.toggle('hidden', !isCrop || items.length === 0);
+    cropEl.style.left = `${crop.x * 100}%`;
+    cropEl.style.top = `${crop.y * 100}%`;
+    cropEl.style.width = `${crop.w * 100}%`;
+    cropEl.style.height = `${crop.h * 100}%`;
+  }
+
+  function transformCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
+    const fine = +(angleSlider?.value ?? 0);
+    const angle = (quarterAngle + fine) * Math.PI / 180;
+    const cos = Math.abs(Math.cos(angle));
+    const sin = Math.abs(Math.sin(angle));
+    const out = document.createElement('canvas');
+    out.width = Math.max(1, Math.ceil(src.width * cos + src.height * sin));
+    out.height = Math.max(1, Math.ceil(src.width * sin + src.height * cos));
+    const ctx = out.getContext('2d');
+    if (!ctx) throw new Error('canvas unavailable');
+    ctx.translate(out.width / 2, out.height / 2);
+    ctx.rotate(angle);
+    ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+    ctx.drawImage(src, -src.width / 2, -src.height / 2);
+    return out;
+  }
+
+  async function drawPreview() {
+    const item = selected();
+    if (!item) return;
+    const src = await loadItem(item);
+    const shown = isCrop ? src : transformCanvas(src);
+    preview.width = shown.width;
+    preview.height = shown.height;
+    const ctx = preview.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, preview.width, preview.height);
+    ctx.drawImage(shown, 0, 0);
+    paintCropBox();
+  }
+
+  async function addFiles(files: FileList | File[]) {
+    const arr = Array.from(files);
+    let accepted = 0;
+    let rejected = 0;
+    const incoming: Item[] = [];
+    for (const f of arr) {
+      const fmt = await detectImageFormat(f);
+      if (fmt) {
+        incoming.push({ id: crypto.randomUUID(), file: f, format: fmt, status: 'ready' });
+        accepted++;
+      } else {
+        rejected++;
+      }
+    }
+    if (accepted === 0 && rejected > 0) showErr('No supported images there — drop HEIC, JPG, PNG, WebP, GIF or BMP files.');
+    else if (rejected > 0) showErr(`${rejected} file${rejected === 1 ? '' : 's'} skipped — not a supported image.`);
+
+    if (incoming.length > 0) {
+      if (isCrop) {
+        items.splice(0, items.length, incoming[0]);
+        if (incoming.length > 1) showErr('Crop works one image at a time, so only the first supported image was loaded.');
+      } else {
+        items.push(...incoming);
+      }
+      selectedId = items[0].id;
+      render();
+      await selectItem(selectedId);
+      requestAnimationFrame(() => exportBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+    }
+  }
+
+  function clearAll() {
+    items.length = 0;
+    selectedId = '';
+    preview.width = 0;
+    preview.height = 0;
+    if (cropEl) cropEl.classList.add('hidden');
+    setProgress(0, 'Idle');
+    render();
+  }
+
+  dropzone.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).id === 'browse') return;
+    input.click();
+  });
+  dropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+  });
+  browse.addEventListener('click', (e) => { e.stopPropagation(); input.click(); });
+  addMoreBtn.addEventListener('click', () => input.click());
+  clearBtn.addEventListener('click', clearAll);
+
+  ['dragenter', 'dragover'].forEach((evt) => dropzone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    dropzone.classList.add('is-dragging');
+    if (scan) scan.hidden = false;
+  }));
+  ['dragleave', 'drop'].forEach((evt) => dropzone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    if (evt === 'dragleave' && e.target !== dropzone) return;
+    dropzone.classList.remove('is-dragging');
+    if (scan) scan.hidden = true;
+  }));
+  dropzone.addEventListener('drop', (e) => {
+    if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+  });
+  input.addEventListener('change', () => {
+    if (input.files) addFiles(input.files);
+    input.value = '';
+  });
+
+  qSlider.addEventListener('input', () => { qVal.textContent = qSlider.value; });
+  document.querySelectorAll('input[name="aspect"]').forEach((el) => el.addEventListener('change', () => {
+    fitCropToAspect();
+    paintCropBox();
+  }));
+
+  if (!isCrop) {
+    document.getElementById('turn-left')?.addEventListener('click', () => { quarterAngle -= 90; drawPreview(); });
+    document.getElementById('turn-right')?.addEventListener('click', () => { quarterAngle += 90; drawPreview(); });
+    document.getElementById('flip-x')?.addEventListener('click', () => { flipX = !flipX; drawPreview(); });
+    document.getElementById('flip-y')?.addEventListener('click', () => { flipY = !flipY; drawPreview(); });
+    document.getElementById('reset-transform')?.addEventListener('click', () => {
+      quarterAngle = 0;
+      flipX = false;
+      flipY = false;
+      if (angleSlider) angleSlider.value = '0';
+      if (angleVal) angleVal.textContent = '0';
+      drawPreview();
+    });
+    angleSlider?.addEventListener('input', () => {
+      if (angleVal) angleVal.textContent = angleSlider.value;
+      drawPreview();
+    });
+  }
+
+  if (cropEl) {
+    let drag: { kind: string; sx: number; sy: number; start: typeof crop } | null = null;
+    cropEl.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const target = e.target as HTMLElement;
+      drag = {
+        kind: target.dataset.handle || 'move',
+        sx: e.clientX,
+        sy: e.clientY,
+        start: { ...crop },
+      };
+      cropEl.setPointerCapture(e.pointerId);
+    });
+    cropEl.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const rect = wrap.getBoundingClientRect();
+      const dx = (e.clientX - drag.sx) / rect.width;
+      const dy = (e.clientY - drag.sy) / rect.height;
+      const s = drag.start;
+      if (drag.kind === 'move') {
+        crop.x = s.x + dx;
+        crop.y = s.y + dy;
+      } else {
+        let x1 = s.x;
+        let y1 = s.y;
+        let x2 = s.x + s.w;
+        let y2 = s.y + s.h;
+        if (drag.kind.includes('w')) x1 = s.x + dx;
+        if (drag.kind.includes('e')) x2 = s.x + s.w + dx;
+        if (drag.kind.includes('n')) y1 = s.y + dy;
+        if (drag.kind.includes('s')) y2 = s.y + s.h + dy;
+        if (x2 < x1) [x1, x2] = [x2, x1];
+        if (y2 < y1) [y1, y2] = [y2, y1];
+        crop = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+        const ratio = aspectRatio();
+        if (ratio) {
+          if (crop.w / crop.h > ratio) crop.w = crop.h * ratio;
+          else crop.h = crop.w / ratio;
+        }
+      }
+      clampCrop();
+      paintCropBox();
+    });
+    cropEl.addEventListener('pointerup', () => { drag = null; });
+    cropEl.addEventListener('pointercancel', () => { drag = null; });
+  }
+
+  function sourceForExport(item: Item): HTMLCanvasElement {
+    if (!item.source) throw new Error('image not loaded');
+    if (!isCrop) return transformCanvas(item.source);
+    const sx = Math.round(crop.x * item.source.width);
+    const sy = Math.round(crop.y * item.source.height);
+    const sw = Math.max(1, Math.round(crop.w * item.source.width));
+    const sh = Math.max(1, Math.round(crop.h * item.source.height));
+    const out = document.createElement('canvas');
+    out.width = sw;
+    out.height = sh;
+    const ctx = out.getContext('2d');
+    if (!ctx) throw new Error('canvas unavailable');
+    ctx.drawImage(item.source, sx, sy, sw, sh, 0, 0, sw, sh);
+    return out;
+  }
+
+  async function canvasToBlob(canvas: HTMLCanvasElement, out: Output): Promise<Blob> {
+    const mime = out === 'png' ? 'image/png' : out === 'webp' ? 'image/webp' : 'image/jpeg';
+    let source = canvas;
+    if (out === 'jpg') {
+      source = document.createElement('canvas');
+      source.width = canvas.width;
+      source.height = canvas.height;
+      const ctx = source.getContext('2d');
+      if (!ctx) throw new Error('canvas unavailable');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, source.width, source.height);
+      ctx.drawImage(canvas, 0, 0);
+    }
+    const blob = await new Promise<Blob | null>((resolve) => source.toBlob(resolve, mime, quality()));
+    if (!blob) throw new Error('could not encode');
+    return blob;
+  }
+
+  function uniqueName(base: string, ext: string, seen: Set<string>): string {
+    let name = `${base}.${ext}`;
+    let n = 2;
+    while (seen.has(name)) { name = `${base} (${n}).${ext}`; n++; }
+    seen.add(name);
+    return name;
+  }
+
+  exportBtn.addEventListener('click', async () => {
+    if (items.length === 0 || working) return;
+    working = true;
+    exportBtn.disabled = true;
+    const out = readOutput();
+    const suffix = isCrop ? 'cropped' : 'rotated';
+    setProgress(1, isCrop ? 'Cropping' : `Rotating 1 of ${items.length}`);
+    try {
+      const blobs: { name: string; blob: Blob }[] = [];
+      const seen = new Set<string>();
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        setProgress((i / items.length) * 90 + 3, isCrop ? 'Cropping' : `Rotating ${i + 1} of ${items.length}`);
+        await loadItem(item);
+        const canvas = sourceForExport(item);
+        const blob = await canvasToBlob(canvas, out);
+        blobs.push({ name: uniqueName(`${stripExtension(item.file.name)}-${suffix}`, out, seen), blob });
+      }
+      setProgress(95, 'Packaging');
+      if (blobs.length === 1) {
+        downloadBlob(blobs[0].blob, blobs[0].name);
+      } else {
+        const zip = new JSZip();
+        for (const item of blobs) zip.file(item.name, item.blob);
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        downloadBlob(zipBlob, `dtmp-${mode}-${todayStamp()}.zip`);
+      }
+      setProgress(100, `Done · ${blobs.length} file${blobs.length === 1 ? '' : 's'}`);
+    } catch (err) {
+      console.error(err);
+      showErr('Something went wrong while exporting the image.');
+      setProgress(0, 'Idle');
+    } finally {
+      working = false;
+      setTimeout(() => setProgress(0, 'Idle'), 1800);
+      render();
+    }
+  });
+
+  updateOutputUI();
+</script>

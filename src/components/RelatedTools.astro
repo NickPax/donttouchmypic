@@ -8,8 +8,8 @@ const all = [
   { id: 'convert',     href: '/convert',     title: 'Convert',     sub: 'Any image, any format.',             live: true  },
   { id: 'compress',    href: '/compress',    title: 'Compress',    sub: 'Shrink photos for email and web.',    live: false },
   { id: 'resize',      href: '/resize',      title: 'Resize',      sub: 'Target width, height, or percent.',  live: false },
-  { id: 'crop',        href: '/crop',        title: 'Crop',        sub: 'Isolate the good bit.',              live: false },
-  { id: 'rotate',      href: '/rotate',      title: 'Rotate',      sub: 'Tilt-correct and flip.',             live: false },
+  { id: 'crop',        href: '/crop',        title: 'Crop',        sub: 'Isolate the good bit.',              live: true  },
+  { id: 'rotate',      href: '/rotate',      title: 'Rotate',      sub: 'Tilt-correct and flip.',             live: true  },
 ] as const;
 const others = all.filter((t) => t.id !== current);
 ---

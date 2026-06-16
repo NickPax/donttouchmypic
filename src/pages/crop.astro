@@ -1,0 +1,68 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ToolHeader from '../components/ToolHeader.astro';
+import ImageEditTool from '../components/tools/ImageEditTool.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Faq from '../components/Faq.astro';
+import RelatedTools from '../components/RelatedTools.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { SITE_NAME, SITE_URL } from '../lib/constants';
+
+const title = 'Crop images online — private, free, nothing uploads · ' + SITE_NAME;
+const description = 'Crop JPG, PNG, WebP, GIF and iPhone HEIC images in your browser. Drag a crop frame, choose JPG, PNG or WebP output, and download. Your image never leaves your device.';
+
+const steps = [
+  { title: 'Drop one image', body: 'Add the photo or screenshot you want to trim. The file is decoded locally inside your browser tab.' },
+  { title: 'Set the frame', body: 'Drag the crop rectangle or pull the corner handles. Use free, square, 4:3 or 16:9 framing when you need a clean ratio.' },
+  { title: 'Download the crop', body: 'Export as JPG, PNG or WebP. The crop is rendered from the original pixels, not from the on-screen preview.' },
+];
+
+const faq = [
+  { q: 'Does the image upload anywhere?', a: 'No. Cropping happens with the Canvas API inside your browser. There is no upload endpoint and no server-side image processing step.' },
+  { q: 'Can I crop HEIC photos from an iPhone?', a: 'Yes. HEIC and HEIF files are decoded locally with libheif via heic2any, then cropped with Canvas.' },
+  { q: 'Can I crop a batch?', a: 'Crop works one image at a time on purpose. A crop frame is a visual decision, and applying one rectangle blindly to unrelated photos usually gives bad results.' },
+  { q: 'Which output format should I pick?', a: '<strong>JPG</strong> is best for photos and smallest files. <strong>PNG</strong> is lossless and keeps transparency. <strong>WebP</strong> is a compact modern choice that can also keep transparency.' },
+  { q: 'Will metadata be preserved?', a: 'No. Exporting creates a fresh file, which strips EXIF metadata like location, camera and timestamp by default.' },
+];
+
+const sd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: `${SITE_NAME} Crop Image`,
+    url: `${SITE_URL}/crop`,
+    applicationCategory: 'Utilities',
+    operatingSystem: 'Any (browser-based)',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a.replace(/<[^>]+>/g, '') },
+    })),
+  },
+];
+---
+<BaseLayout title={title} description={description} path="/crop" structuredData={sd}>
+  <ToolHeader
+    kicker="Tool · 04"
+    title="Crop"
+    tagline="Cut to the part that matters."
+    description="Drop one image, pull the crop handles, and export a clean JPG, PNG or WebP. The image stays in this tab from start to finish."
+    accent="ink"
+  >
+    <svg slot="icon" viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 3v4M7 7H3M17 17v4M17 17h4M7 7h10v10H7z"/></svg>
+  </ToolHeader>
+
+  <ImageEditTool mode="crop" />
+
+  <AdSlot position="crop-under-tool" size="970x250" />
+  <HowItWorks steps={steps} heading="How cropping works" />
+  <Faq items={faq} heading="Crop images · FAQ" />
+  <AdSlot position="crop-faq-bottom" size="728x90" />
+  <RelatedTools current="crop" />
+</BaseLayout>
