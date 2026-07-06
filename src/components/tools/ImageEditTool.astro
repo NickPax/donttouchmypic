@@ -59,18 +59,18 @@ const action = isCrop ? 'Crop & download' : 'Rotate & download';
                 <div id="canvas-wrap" class="relative inline-block max-w-full">
                   <canvas id="preview-canvas" class="block max-w-full max-h-[68vh] bg-[var(--color-paper)]"></canvas>
                   {isCrop && (
-                    <div id="crop-box" class="absolute border-2 border-[var(--color-emerald)] bg-[color-mix(in_srgb,var(--color-emerald)_14%,transparent)] shadow-[0_0_0_9999px_rgba(0,0,0,0.28)] cursor-move hidden">
+                    <div id="crop-box" class="absolute border-2 border-[var(--color-emerald)] bg-[color-mix(in_srgb,var(--color-emerald)_14%,transparent)] shadow-[0_0_0_9999px_rgba(0,0,0,0.28)] cursor-move hidden touch-none select-none">
                       {['n','e','s','w','nw','ne','sw','se'].map((h) => (
                         <span data-handle={h} class:list={[
-                          'absolute w-4 h-4 bg-[var(--color-paper)] border-2 border-[var(--color-emerald)] rounded-full',
-                          h === 'n'  && 'left-1/2 -translate-x-1/2 -top-2 cursor-ns-resize',
-                          h === 'e'  && '-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize',
-                          h === 's'  && 'left-1/2 -translate-x-1/2 -bottom-2 cursor-ns-resize',
-                          h === 'w'  && '-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize',
-                          h === 'nw' && '-left-2 -top-2 cursor-nwse-resize',
-                          h === 'ne' && '-right-2 -top-2 cursor-nesw-resize',
-                          h === 'sw' && '-left-2 -bottom-2 cursor-nesw-resize',
-                          h === 'se' && '-right-2 -bottom-2 cursor-nwse-resize',
+                          'absolute w-5 h-5 bg-[var(--color-paper)] border-2 border-[var(--color-emerald)] rounded-full touch-none',
+                          h === 'n'  && 'left-1/2 -translate-x-1/2 -top-2.5 cursor-ns-resize',
+                          h === 'e'  && '-right-2.5 top-1/2 -translate-y-1/2 cursor-ew-resize',
+                          h === 's'  && 'left-1/2 -translate-x-1/2 -bottom-2.5 cursor-ns-resize',
+                          h === 'w'  && '-left-2.5 top-1/2 -translate-y-1/2 cursor-ew-resize',
+                          h === 'nw' && '-left-2.5 -top-2.5 cursor-nwse-resize',
+                          h === 'ne' && '-right-2.5 -top-2.5 cursor-nesw-resize',
+                          h === 'sw' && '-left-2.5 -bottom-2.5 cursor-nesw-resize',
+                          h === 'se' && '-right-2.5 -bottom-2.5 cursor-nwse-resize',
                         ]}></span>
                       ))}
                     </div>
@@ -407,8 +407,26 @@ const action = isCrop ? 'Crop & download' : 'Rotate & download';
     return w / h;
   }
 
-  function fitCropToAspect() {
+  function normalizedAspectRatio(): number | null {
     const ratio = aspectRatio();
+    const item = selected();
+    const src = item?.source;
+    if (!ratio || !src || src.width === 0 || src.height === 0) return null;
+    return ratio * (src.height / src.width);
+  }
+
+  function minCropSize() {
+    const item = selected();
+    const src = item?.source;
+    const minPx = 24;
+    return {
+      w: src ? Math.min(0.35, Math.max(0.02, minPx / src.width)) : 0.02,
+      h: src ? Math.min(0.35, Math.max(0.02, minPx / src.height)) : 0.02,
+    };
+  }
+
+  function fitCropToAspect() {
+    const ratio = normalizedAspectRatio();
     if (!ratio) return;
     let w = crop.w;
     let h = w / ratio;
@@ -424,10 +442,112 @@ const action = isCrop ? 'Crop & download' : 'Rotate & download';
   }
 
   function clampCrop() {
-    crop.w = Math.max(0.05, Math.min(1, crop.w));
-    crop.h = Math.max(0.05, Math.min(1, crop.h));
+    const min = minCropSize();
+    crop.w = Math.max(min.w, Math.min(1, crop.w));
+    crop.h = Math.max(min.h, Math.min(1, crop.h));
     crop.x = Math.max(0, Math.min(1 - crop.w, crop.x));
     crop.y = Math.max(0, Math.min(1 - crop.h, crop.y));
+  }
+
+  function cropFromEdges(x1: number, y1: number, x2: number, y2: number) {
+    const left = Math.max(0, Math.min(1, Math.min(x1, x2)));
+    const top = Math.max(0, Math.min(1, Math.min(y1, y2)));
+    const right = Math.max(0, Math.min(1, Math.max(x1, x2)));
+    const bottom = Math.max(0, Math.min(1, Math.max(y1, y2)));
+    return { x: left, y: top, w: right - left, h: bottom - top };
+  }
+
+  function resizedCrop(kind: string, start: typeof crop, dx: number, dy: number): typeof crop {
+    const ratio = normalizedAspectRatio();
+    const min = minCropSize();
+
+    if (!ratio) {
+      let x1 = start.x;
+      let y1 = start.y;
+      let x2 = start.x + start.w;
+      let y2 = start.y + start.h;
+      if (kind.includes('w')) x1 = start.x + dx;
+      if (kind.includes('e')) x2 = start.x + start.w + dx;
+      if (kind.includes('n')) y1 = start.y + dy;
+      if (kind.includes('s')) y2 = start.y + start.h + dy;
+      const next = cropFromEdges(x1, y1, x2, y2);
+      if (next.w < min.w) {
+        if (kind.includes('w')) next.x = Math.min(1 - min.w, next.x + next.w - min.w);
+        next.w = min.w;
+      }
+      if (next.h < min.h) {
+        if (kind.includes('n')) next.y = Math.min(1 - min.h, next.y + next.h - min.h);
+        next.h = min.h;
+      }
+      return next;
+    }
+
+    const west = kind.includes('w');
+    const east = kind.includes('e');
+    const north = kind.includes('n');
+    const south = kind.includes('s');
+    const sideOnly = (west || east) !== (north || south);
+
+    if (sideOnly && (west || east)) {
+      const fixedX = west ? start.x + start.w : start.x;
+      const movingX = Math.max(0, Math.min(1, west ? start.x + dx : start.x + start.w + dx));
+      const centerY = start.y + start.h / 2;
+      const maxWidthFromEdge = west ? fixedX : 1 - fixedX;
+      const maxHeightFromCenter = 2 * Math.min(centerY, 1 - centerY);
+      let w = Math.min(Math.max(Math.abs(movingX - fixedX), min.w), maxWidthFromEdge, maxHeightFromCenter * ratio);
+      let h = w / ratio;
+      if (h < min.h) {
+        h = Math.min(min.h, maxHeightFromCenter);
+        w = Math.min(h * ratio, maxWidthFromEdge);
+        h = w / ratio;
+      }
+      const x = west ? fixedX - w : fixedX;
+      return { x, y: centerY - h / 2, w, h };
+    }
+
+    if (sideOnly && (north || south)) {
+      const fixedY = north ? start.y + start.h : start.y;
+      const movingY = Math.max(0, Math.min(1, north ? start.y + dy : start.y + start.h + dy));
+      const centerX = start.x + start.w / 2;
+      const maxHeightFromEdge = north ? fixedY : 1 - fixedY;
+      const maxWidthFromCenter = 2 * Math.min(centerX, 1 - centerX);
+      let h = Math.min(Math.max(Math.abs(movingY - fixedY), min.h), maxHeightFromEdge, maxWidthFromCenter / ratio);
+      let w = h * ratio;
+      if (w < min.w) {
+        w = Math.min(min.w, maxWidthFromCenter);
+        h = Math.min(w / ratio, maxHeightFromEdge);
+        w = h * ratio;
+      }
+      const y = north ? fixedY - h : fixedY;
+      return { x: centerX - w / 2, y, w, h };
+    }
+
+    const fixedX = west ? start.x + start.w : start.x;
+    const fixedY = north ? start.y + start.h : start.y;
+    const movingX = Math.max(0, Math.min(1, west ? start.x + dx : start.x + start.w + dx));
+    const movingY = Math.max(0, Math.min(1, north ? start.y + dy : start.y + start.h + dy));
+    const maxW = west ? fixedX : 1 - fixedX;
+    const maxH = north ? fixedY : 1 - fixedY;
+    let w = Math.max(Math.abs(movingX - fixedX), min.w);
+    let h = Math.max(Math.abs(movingY - fixedY), min.h);
+
+    if (w / h > ratio) w = h * ratio;
+    else h = w / ratio;
+    if (w > maxW) {
+      w = maxW;
+      h = w / ratio;
+    }
+    if (h > maxH) {
+      h = maxH;
+      w = h * ratio;
+    }
+
+    return {
+      x: west ? fixedX - w : fixedX,
+      y: north ? fixedY - h : fixedY,
+      w,
+      h,
+    };
   }
 
   function snapTarget(value: number, targets: number[]): number | null {
@@ -679,7 +799,6 @@ const action = isCrop ? 'Crop & download' : 'Rotate & download';
 
   document.querySelectorAll('input[name="aspect"]').forEach((el) => el.addEventListener('change', () => {
     fitCropToAspect();
-    snapCropToEdges('nwse');
     paintCropBox();
   }));
   document.getElementById('full-frame')?.addEventListener('click', fullCrop);
@@ -730,25 +849,10 @@ const action = isCrop ? 'Crop & download' : 'Rotate & download';
         crop.x = s.x + dx;
         crop.y = s.y + dy;
       } else {
-        let x1 = s.x;
-        let y1 = s.y;
-        let x2 = s.x + s.w;
-        let y2 = s.y + s.h;
-        if (drag.kind.includes('w')) x1 = s.x + dx;
-        if (drag.kind.includes('e')) x2 = s.x + s.w + dx;
-        if (drag.kind.includes('n')) y1 = s.y + dy;
-        if (drag.kind.includes('s')) y2 = s.y + s.h + dy;
-        if (x2 < x1) [x1, x2] = [x2, x1];
-        if (y2 < y1) [y1, y2] = [y2, y1];
-        crop = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
-        const ratio = aspectRatio();
-        if (ratio) {
-          if (crop.w / crop.h > ratio) crop.w = crop.h * ratio;
-          else crop.h = crop.w / ratio;
-        }
+        crop = resizedCrop(drag.kind, s, dx, dy);
       }
       clampCrop();
-      snapCropToEdges(drag.kind);
+      if (drag.kind === 'move' || !normalizedAspectRatio()) snapCropToEdges(drag.kind);
       paintCropBox();
     });
     cropEl.addEventListener('pointerup', () => { drag = null; });
