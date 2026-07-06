@@ -1,0 +1,69 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ToolHeader from '../components/ToolHeader.astro';
+import ResizeTool from '../components/tools/ResizeTool.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Faq from '../components/Faq.astro';
+import RelatedTools from '../components/RelatedTools.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { SITE_NAME, SITE_URL } from '../lib/constants';
+
+const title = 'Resize images online — private, free, nothing uploads · ' + SITE_NAME;
+const description = 'Resize JPG, PNG, WebP, GIF and iPhone HEIC images in your browser. Set width, height, percentage or presets, then download JPG, PNG or WebP. Batch-friendly and private.';
+
+const steps = [
+  { title: 'Drop images', body: 'Add one photo or a batch. The browser decodes each file locally; there is no upload step and no server-side processing.' },
+  { title: 'Choose the new size', body: 'Set exact pixels, resize by percentage, or use a quick size. Aspect ratio stays locked unless you deliberately turn it off.' },
+  { title: 'Download resized files', body: 'Single image downloads directly. Multiple resized images are packed into a zip in the browser.' },
+];
+
+const faq = [
+  { q: 'Does the image upload anywhere?', a: 'No. Resizing happens with the Canvas API inside your browser tab. The site has no backend upload endpoint.' },
+  { q: 'Can I resize HEIC photos from an iPhone?', a: 'Yes. HEIC and HEIF files are decoded locally with libheif via heic2any, then resized with Canvas.' },
+  { q: 'Can I resize a whole batch?', a: 'Yes. Drop multiple images, choose the target size once, and download the resized results as a zip.' },
+  { q: 'Can I keep the original aspect ratio?', a: 'Yes. Aspect ratio is locked by default when resizing by pixels. If you enter a width, the height follows, and the reverse works too.' },
+  { q: 'Which output format should I pick?', a: '<strong>JPG</strong> is best for photos and small files. <strong>PNG</strong> is lossless and keeps transparency. <strong>WebP</strong> is compact and modern.' },
+  { q: 'Will metadata be preserved?', a: 'No. Exporting creates a fresh resized image, which strips EXIF metadata like location, camera and timestamp by default.' },
+];
+
+const sd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: `${SITE_NAME} Resize Image`,
+    url: `${SITE_URL}/resize`,
+    applicationCategory: 'Utilities',
+    operatingSystem: 'Any (browser-based)',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a.replace(/<[^>]+>/g, '') },
+    })),
+  },
+];
+---
+<BaseLayout title={title} description={description} path="/resize" structuredData={sd}>
+  <ToolHeader
+    kicker="Tool · 03"
+    title="Resize"
+    tagline="Make the pixels fit the place."
+    description="Set exact dimensions, scale by percentage, or use a quick preset. Batch jobs stay in the browser and download as a zip."
+    accent="emerald"
+  >
+    <svg slot="icon" viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="6" width="12" height="12"/><path d="M3 3l4 4M21 21l-4-4M3 21l4-4M21 3l-4 4"/></svg>
+  </ToolHeader>
+
+  <ResizeTool />
+
+  <AdSlot position="resize-under-tool" size="970x250" />
+  <HowItWorks steps={steps} heading="How resizing works" />
+  <Faq items={faq} heading="Resize images · FAQ" />
+  <AdSlot position="resize-faq-bottom" size="728x90" />
+  <RelatedTools current="resize" />
+</BaseLayout>

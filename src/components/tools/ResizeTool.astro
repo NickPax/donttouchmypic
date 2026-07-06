@@ -1,0 +1,671 @@
+---
+// Client-side image resizer. Decodes HEIC locally via heic2any, standard
+// formats through the browser, resizes with Canvas, and zips batches with
+// JSZip. No network path is involved.
+import AdSlot from '../AdSlot.astro';
+---
+<section id="tool" class="mx-auto max-w-[1320px] px-5 sm:px-8 pt-10 pb-16">
+  <div class="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8">
+    <div>
+      <div
+        id="dropzone"
+        class="drop-target relative rounded-sm p-10 md:p-14 text-center cursor-pointer"
+        role="button"
+        tabindex="0"
+        aria-label="Drop images here, or click to browse"
+      >
+        <div class="scanline rounded-sm" data-scanline hidden></div>
+        <div class="relative">
+          <div class="mx-auto w-14 h-14 inline-flex items-center justify-center rounded-sm bg-[var(--color-emerald-lt)] text-[var(--color-emerald-dk)]">
+            <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/><path d="M3 3l4 4M21 21l-4-4M3 21l4-4M21 3l-4 4"/></svg>
+          </div>
+          <h2 class="mt-5 display-3">Drop images to resize.</h2>
+          <p class="mt-2 text-sm text-[color-mix(in_srgb,var(--color-ink)_75%,transparent)]">
+            Drag straight from a file window — or <button type="button" id="browse" class="underline decoration-[var(--color-emerald-dk)] decoration-2 underline-offset-4">browse</button>.
+            Set pixels, percent, or a preset. HEIC, JPG, PNG, WebP, GIF &amp; more.
+          </p>
+        </div>
+        <input id="file-input" type="file" multiple class="sr-only" />
+      </div>
+
+      <div id="file-panel" class="mt-6 hidden">
+        <div class="card p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="chip chip-ink" id="chip-count">0 files</span>
+              <span class="chip" id="chip-size">0 B</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="add-more" class="btn btn-ghost !py-2 !px-3">Add more</button>
+              <button type="button" id="clear-all" class="btn btn-ghost !py-2 !px-3">Clear</button>
+            </div>
+          </div>
+
+          <div class="grid xl:grid-cols-[minmax(0,1fr)_310px] gap-5 items-start">
+            <div class="min-w-0">
+              <div class="relative overflow-auto rounded-sm border border-[var(--color-rule)] bg-[var(--color-paper-2)] min-h-[300px] flex items-center justify-center p-3">
+                <div id="preview-empty" class="text-center px-6">
+                  <div class="font-display text-[26px] leading-tight">Choose a file to preview.</div>
+                  <p class="mt-2 text-sm text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">The full-size export uses the original pixels.</p>
+                </div>
+                <canvas id="preview-canvas" class="hidden block max-w-full max-h-[68vh] bg-[var(--color-paper)]"></canvas>
+              </div>
+              <div class="mt-3 grid grid-cols-2 gap-3">
+                <div class="border border-[var(--color-rule)] rounded-sm p-3">
+                  <div class="kicker text-[10px]">Original</div>
+                  <div id="original-stat" class="font-display text-[26px] leading-none mt-1">—</div>
+                </div>
+                <div class="border border-[var(--color-rule)] rounded-sm p-3">
+                  <div class="kicker text-[10px]">Resized</div>
+                  <div id="target-stat" class="font-display text-[26px] leading-none mt-1">—</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-5">
+              <ul id="file-list" class="divide-y divide-[var(--color-rule)] max-h-[260px] overflow-auto border border-[var(--color-rule)] rounded-sm"></ul>
+
+              <div class="rule pt-5">
+                <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Resize by</div>
+                <div class="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Resize mode">
+                  <label class="cursor-pointer">
+                    <input type="radio" name="resize-mode" value="pixels" checked class="sr-only peer" />
+                    <span class="block text-center py-2 px-2 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">Pixels</span>
+                  </label>
+                  <label class="cursor-pointer">
+                    <input type="radio" name="resize-mode" value="percent" class="sr-only peer" />
+                    <span class="block text-center py-2 px-2 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">Percent</span>
+                  </label>
+                </div>
+              </div>
+
+              <div id="pixel-controls" class="rule pt-5 space-y-4">
+                <label class="block">
+                  <span class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Width</span>
+                  <input id="width-input" type="number" inputmode="numeric" min="1" max="12000" step="1" class="mt-2 w-full rounded-sm border border-[var(--color-rule)] bg-[var(--color-paper)] px-3 py-2 font-mono text-sm" />
+                </label>
+                <label class="block">
+                  <span class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Height</span>
+                  <input id="height-input" type="number" inputmode="numeric" min="1" max="12000" step="1" class="mt-2 w-full rounded-sm border border-[var(--color-rule)] bg-[var(--color-paper)] px-3 py-2 font-mono text-sm" />
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input id="lock-aspect" type="checkbox" checked class="w-4 h-4 accent-[var(--color-emerald-dk)]" />
+                  <span class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_78%,transparent)]">Lock aspect ratio</span>
+                </label>
+              </div>
+
+              <div id="percent-controls" class="rule pt-5 hidden">
+                <div class="flex items-center justify-between">
+                  <label for="percent-input" class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Scale</label>
+                  <span class="font-mono text-sm"><span id="percent-val">50</span>%</span>
+                </div>
+                <input id="percent-input" type="range" min="5" max="200" step="1" value="50" class="w-full mt-3 accent-[var(--color-emerald-dk)]" />
+              </div>
+
+              <div class="rule pt-5">
+                <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Quick sizes</div>
+                <div class="mt-2 grid grid-cols-2 gap-2">
+                  {[
+                    ['50%', 'Half'],
+                    ['25%', 'Quarter'],
+                    ['1600', '1600 wide'],
+                    ['1080', '1080 wide'],
+                  ].map(([value, label]) => (
+                    <button type="button" data-preset={value} class="btn btn-ghost !justify-center !py-2 !px-3">{label}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div class="rule pt-5">
+                <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Save as</div>
+                <div class="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Output format">
+                  {['jpg', 'png', 'webp'].map((fmt) => (
+                    <label class="cursor-pointer">
+                      <input type="radio" name="output" value={fmt} checked={fmt === 'jpg'} class="sr-only peer" />
+                      <span class="block text-center py-2 px-2 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">{fmt}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div id="quality-block" class="rule pt-5">
+                <div class="flex items-center justify-between">
+                  <label for="quality" class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Image quality</label>
+                  <span class="font-mono text-sm"><span id="quality-val">88</span>%</span>
+                </div>
+                <input id="quality" type="range" min="50" max="100" step="1" value="88" class="w-full mt-3 accent-[var(--color-emerald-dk)]" />
+              </div>
+
+              <button id="resize-btn" class="btn btn-primary w-full justify-center" disabled>
+                Resize &amp; download
+                <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v14M6 11l6 6 6-6M5 21h14"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-6 rule pt-5">
+            <div class="flex items-center justify-between mb-1.5 font-mono text-[11px] tracking-[0.12em] uppercase text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">
+              <span id="status-label">Idle</span>
+              <span id="progress-num">0%</span>
+            </div>
+            <div class="bar"><span id="progress-bar" style="width:0%"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="err" role="alert" class="mt-6 hidden border border-[var(--color-red-stamp)] bg-[var(--color-red-stamp-bg)] text-[var(--color-red-stamp)] font-mono text-xs uppercase tracking-[0.14em] p-3 rounded-sm"></div>
+    </div>
+
+    <aside class="space-y-5">
+      <div class="card p-5">
+        <div class="section-num">Local runtime</div>
+        <h3 class="font-display text-[22px] mt-1 leading-tight">What's running?</h3>
+        <ul class="mt-3 text-sm space-y-2 font-mono">
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Decoder</span><span>Canvas 2D / libheif</span></li>
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Scaler</span><span>Canvas resize</span></li>
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Network</span><span class="text-[var(--color-emerald-dk)]">idle</span></li>
+        </ul>
+      </div>
+      <AdSlot position="resize-sidebar" size="300x250" />
+      <div class="card-ink p-5">
+        <div class="font-mono text-[11px] tracking-[0.2em] uppercase opacity-80">Good to know</div>
+        <p class="mt-2 text-[15px] leading-relaxed">
+          Resizing writes a fresh image, which strips EXIF metadata by default. JPG output flattens transparency onto white; PNG and WebP keep it where the browser can.
+        </p>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<script>
+  import JSZip from 'jszip';
+  import { formatBytes, downloadBlob, stripExtension, todayStamp } from '../../lib/format.ts';
+
+  type Item = {
+    id: string;
+    file: File;
+    format: string;
+    status: 'ready' | 'loading' | 'done' | 'error';
+    source?: HTMLCanvasElement;
+    outSize?: number;
+    error?: string;
+  };
+  type Output = 'jpg' | 'png' | 'webp';
+  type Mode = 'pixels' | 'percent';
+
+  const dropzone = document.getElementById('dropzone') as HTMLDivElement;
+  const input = document.getElementById('file-input') as HTMLInputElement;
+  const browse = document.getElementById('browse') as HTMLButtonElement;
+  const panel = document.getElementById('file-panel') as HTMLDivElement;
+  const addMoreBtn = document.getElementById('add-more') as HTMLButtonElement;
+  const clearBtn = document.getElementById('clear-all') as HTMLButtonElement;
+  const chipCount = document.getElementById('chip-count') as HTMLSpanElement;
+  const chipSize = document.getElementById('chip-size') as HTMLSpanElement;
+  const listEl = document.getElementById('file-list') as HTMLUListElement;
+  const preview = document.getElementById('preview-canvas') as HTMLCanvasElement;
+  const previewEmpty = document.getElementById('preview-empty') as HTMLDivElement;
+  const originalStat = document.getElementById('original-stat') as HTMLDivElement;
+  const targetStat = document.getElementById('target-stat') as HTMLDivElement;
+  const pixelControls = document.getElementById('pixel-controls') as HTMLDivElement;
+  const percentControls = document.getElementById('percent-controls') as HTMLDivElement;
+  const widthInput = document.getElementById('width-input') as HTMLInputElement;
+  const heightInput = document.getElementById('height-input') as HTMLInputElement;
+  const lockAspect = document.getElementById('lock-aspect') as HTMLInputElement;
+  const percentInput = document.getElementById('percent-input') as HTMLInputElement;
+  const percentVal = document.getElementById('percent-val') as HTMLSpanElement;
+  const qBlock = document.getElementById('quality-block') as HTMLDivElement;
+  const qSlider = document.getElementById('quality') as HTMLInputElement;
+  const qVal = document.getElementById('quality-val') as HTMLSpanElement;
+  const resizeBtn = document.getElementById('resize-btn') as HTMLButtonElement;
+  const progBar = document.getElementById('progress-bar') as HTMLSpanElement;
+  const progNum = document.getElementById('progress-num') as HTMLSpanElement;
+  const statusLabel = document.getElementById('status-label') as HTMLSpanElement;
+  const errEl = document.getElementById('err') as HTMLDivElement;
+  const scan = dropzone.querySelector('[data-scanline]') as HTMLDivElement;
+
+  const items: Item[] = [];
+  let selectedId = '';
+  let working = false;
+  let syncingDims = false;
+  let dimensionBasis: 'width' | 'height' = 'width';
+  const MAX_DIMENSION = 12000;
+  const HEIC_BRANDS = new Set(['heic','heix','heim','heis','mif1','msf1','hevc','hevx','hevm','hevs']);
+
+  async function detectImageFormat(f: File): Promise<string | null> {
+    try {
+      const buf = await f.slice(0, 32).arrayBuffer();
+      const b = new Uint8Array(buf);
+      if (b.length < 12) return null;
+      if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
+      if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'png';
+      if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'gif';
+      if (b[0] === 0x42 && b[1] === 0x4d) return 'bmp';
+      if (String.fromCharCode(b[0], b[1], b[2], b[3]) === 'RIFF' && String.fromCharCode(b[8], b[9], b[10], b[11]) === 'WEBP') return 'webp';
+      if (String.fromCharCode(b[4], b[5], b[6], b[7]) === 'ftyp') {
+        const brand = String.fromCharCode(b[8], b[9], b[10], b[11]);
+        if (HEIC_BRANDS.has(brand)) return 'heic';
+        if (brand === 'avif' || brand === 'avis') return 'avif';
+      }
+      const name = f.name.toLowerCase();
+      if (name.endsWith('.heic') || name.endsWith('.heif')) return 'heic';
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function decodeToBitmap(item: Item): Promise<ImageBitmap> {
+    if (item.format === 'heic' || item.format === 'heif') {
+      const { default: heic2any } = await import('heic2any');
+      const result = await heic2any({ blob: item.file, toType: 'image/png' });
+      const blob: Blob = Array.isArray(result) ? result[0] : result;
+      return await createImageBitmap(blob);
+    }
+    return await createImageBitmap(item.file, { imageOrientation: 'from-image' });
+  }
+
+  async function loadItem(item: Item): Promise<HTMLCanvasElement> {
+    if (item.source) return item.source;
+    item.status = 'loading';
+    render();
+    const bitmap = await decodeToBitmap(item);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('canvas unavailable');
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    item.source = canvas;
+    item.status = 'ready';
+    render();
+    return canvas;
+  }
+
+  function selected(): Item | undefined {
+    return items.find((i) => i.id === selectedId) || items[0];
+  }
+
+  function readMode(): Mode {
+    const checked = document.querySelector('input[name="resize-mode"]:checked') as HTMLInputElement | null;
+    return checked?.value === 'percent' ? 'percent' : 'pixels';
+  }
+
+  function readOutput(): Output {
+    const checked = document.querySelector('input[name="output"]:checked') as HTMLInputElement | null;
+    return checked?.value === 'png' || checked?.value === 'webp' ? checked.value : 'jpg';
+  }
+
+  function cleanDimension(value: number): number {
+    if (!Number.isFinite(value)) return 1;
+    return Math.max(1, Math.min(MAX_DIMENSION, Math.round(value)));
+  }
+
+  function targetFor(src: HTMLCanvasElement): { width: number; height: number } {
+    if (readMode() === 'percent') {
+      const pct = Math.max(5, Math.min(200, +percentInput.value || 50)) / 100;
+      return {
+        width: cleanDimension(src.width * pct),
+        height: cleanDimension(src.height * pct),
+      };
+    }
+    if (lockAspect.checked) {
+      if (dimensionBasis === 'height') {
+        const height = cleanDimension(+heightInput.value || src.height);
+        return {
+          width: cleanDimension(height * (src.width / src.height)),
+          height,
+        };
+      }
+      const width = cleanDimension(+widthInput.value || src.width);
+      return {
+        width,
+        height: cleanDimension(width * (src.height / src.width)),
+      };
+    }
+    return {
+      width: cleanDimension(+widthInput.value || src.width),
+      height: cleanDimension(+heightInput.value || src.height),
+    };
+  }
+
+  function quality(): number {
+    return Math.max(50, Math.min(100, +qSlider.value)) / 100;
+  }
+
+  function setProgress(pct: number, label?: string) {
+    const c = Math.max(0, Math.min(100, pct));
+    progBar.style.width = `${c}%`;
+    progNum.textContent = `${Math.round(c)}%`;
+    if (label) statusLabel.textContent = label;
+  }
+
+  let errTimer: ReturnType<typeof setTimeout> | undefined;
+  function showErr(msg: string) {
+    if (errTimer) clearTimeout(errTimer);
+    errEl.textContent = msg;
+    errEl.classList.remove('hidden');
+    errTimer = setTimeout(() => errEl.classList.add('hidden'), 6500);
+  }
+
+  function syncPixelInputs(changed: 'width' | 'height') {
+    dimensionBasis = changed;
+    if (syncingDims || !lockAspect.checked) return;
+    const item = selected();
+    const src = item?.source;
+    if (!src) return;
+    const ratio = src.width / src.height;
+    syncingDims = true;
+    if (changed === 'width') {
+      heightInput.value = String(cleanDimension((+widthInput.value || src.width) / ratio));
+    } else {
+      widthInput.value = String(cleanDimension((+heightInput.value || src.height) * ratio));
+    }
+    syncingDims = false;
+  }
+
+  function setDefaultDimensions(src: HTMLCanvasElement) {
+    const maxWidth = src.width > 2400 ? 1600 : Math.max(1, Math.round(src.width * 0.5));
+    const scale = Math.min(1, maxWidth / src.width);
+    widthInput.value = String(cleanDimension(src.width * scale));
+    heightInput.value = String(cleanDimension(src.height * scale));
+    dimensionBasis = 'width';
+    percentInput.value = '50';
+    percentVal.textContent = '50';
+  }
+
+  function updateControlVisibility() {
+    const percent = readMode() === 'percent';
+    pixelControls.classList.toggle('hidden', percent);
+    percentControls.classList.toggle('hidden', !percent);
+    updateTargetStats();
+  }
+
+  function updateOutputUI() {
+    qBlock.classList.toggle('hidden', readOutput() === 'png');
+  }
+
+  function updateTargetStats() {
+    const item = selected();
+    if (!item?.source) {
+      originalStat.textContent = '—';
+      targetStat.textContent = '—';
+      return;
+    }
+    const target = targetFor(item.source);
+    originalStat.textContent = `${item.source.width}×${item.source.height}`;
+    targetStat.textContent = `${target.width}×${target.height}`;
+  }
+
+  function render() {
+    panel.classList.toggle('hidden', items.length === 0);
+    const total = items.reduce((acc, item) => acc + item.file.size, 0);
+    chipCount.textContent = `${items.length} file${items.length === 1 ? '' : 's'}`;
+    chipSize.textContent = formatBytes(total);
+    resizeBtn.disabled = working || items.length === 0;
+
+    listEl.innerHTML = '';
+    for (const item of items) {
+      const li = document.createElement('li');
+      li.className = 'p-3 flex items-center gap-3 min-w-0';
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `min-w-0 flex-1 text-left rounded-sm p-1 ${item.id === selectedId ? 'bg-[var(--color-paper-2)]' : ''}`;
+      const name = document.createElement('div');
+      name.className = 'font-display text-[18px] truncate';
+      name.textContent = item.file.name;
+      const meta = document.createElement('div');
+      meta.className = 'font-mono text-[11px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]';
+      const dims = item.source ? ` · ${item.source.width}×${item.source.height}` : '';
+      const out = item.outSize ? ` → ${formatBytes(item.outSize)}` : '';
+      meta.textContent = `${item.format.toUpperCase()} · ${formatBytes(item.file.size)}${dims}${out} · ${item.status}`;
+      if (item.status === 'done') meta.classList.add('text-[var(--color-emerald-dk)]');
+      if (item.status === 'error') meta.classList.add('text-[var(--color-red-stamp)]');
+      button.appendChild(name);
+      button.appendChild(meta);
+      button.addEventListener('click', () => selectItem(item.id));
+      li.appendChild(button);
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'w-8 h-8 inline-flex items-center justify-center border border-[var(--color-rule)] rounded-sm hover:bg-[var(--color-paper-2)]';
+      remove.setAttribute('aria-label', `Remove ${item.file.name}`);
+      remove.innerHTML = '<svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+      remove.disabled = working;
+      remove.addEventListener('click', () => {
+        const idx = items.findIndex((i) => i.id === item.id);
+        if (idx >= 0) items.splice(idx, 1);
+        if (selectedId === item.id) selectedId = items[0]?.id ?? '';
+        render();
+        drawPreview();
+      });
+      li.appendChild(remove);
+      listEl.appendChild(li);
+    }
+    updateTargetStats();
+  }
+
+  async function selectItem(id: string) {
+    selectedId = id;
+    const item = selected();
+    if (!item) return;
+    try {
+      const firstLoad = !item.source;
+      const src = await loadItem(item);
+      if (firstLoad && items.length === 1) setDefaultDimensions(src);
+      else if (lockAspect.checked) syncPixelInputs(dimensionBasis);
+      await drawPreview();
+    } catch (err) {
+      console.error(err);
+      item.status = 'error';
+      item.error = (err as Error).message;
+      showErr('That image could not be decoded in this browser.');
+      render();
+    }
+  }
+
+  function resizeCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
+    const target = targetFor(src);
+    const out = document.createElement('canvas');
+    out.width = target.width;
+    out.height = target.height;
+    const ctx = out.getContext('2d');
+    if (!ctx) throw new Error('canvas unavailable');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(src, 0, 0, target.width, target.height);
+    return out;
+  }
+
+  async function drawPreview() {
+    const item = selected();
+    if (!item) {
+      preview.classList.add('hidden');
+      previewEmpty.classList.remove('hidden');
+      updateTargetStats();
+      return;
+    }
+    const src = await loadItem(item);
+    const resized = resizeCanvas(src);
+    preview.width = resized.width;
+    preview.height = resized.height;
+    const ctx = preview.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, preview.width, preview.height);
+    ctx.drawImage(resized, 0, 0);
+    preview.classList.remove('hidden');
+    previewEmpty.classList.add('hidden');
+    updateTargetStats();
+  }
+
+  async function addFiles(files: FileList | File[]) {
+    const arr = Array.from(files);
+    let accepted = 0;
+    let rejected = 0;
+    const incoming: Item[] = [];
+    for (const f of arr) {
+      const fmt = await detectImageFormat(f);
+      if (fmt) {
+        incoming.push({ id: crypto.randomUUID(), file: f, format: fmt, status: 'ready' });
+        accepted++;
+      } else {
+        rejected++;
+      }
+    }
+    if (accepted === 0 && rejected > 0) showErr('No supported images there — drop HEIC, JPG, PNG, WebP, GIF or BMP files.');
+    else if (rejected > 0) showErr(`${rejected} file${rejected === 1 ? '' : 's'} skipped — not a supported image.`);
+
+    if (incoming.length > 0) {
+      items.push(...incoming);
+      selectedId = selectedId || incoming[0].id;
+      render();
+      await selectItem(selectedId);
+      requestAnimationFrame(() => resizeBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+    }
+  }
+
+  function clearAll() {
+    if (working) return;
+    items.length = 0;
+    selectedId = '';
+    preview.width = 0;
+    preview.height = 0;
+    preview.classList.add('hidden');
+    previewEmpty.classList.remove('hidden');
+    setProgress(0, 'Idle');
+    render();
+  }
+
+  dropzone.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).id === 'browse') return;
+    input.click();
+  });
+  dropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+  });
+  browse.addEventListener('click', (e) => { e.stopPropagation(); input.click(); });
+  addMoreBtn.addEventListener('click', () => input.click());
+  clearBtn.addEventListener('click', clearAll);
+
+  ['dragenter', 'dragover'].forEach((evt) => dropzone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    dropzone.classList.add('is-dragging');
+    if (scan) scan.hidden = false;
+  }));
+  ['dragleave', 'drop'].forEach((evt) => dropzone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    if (evt === 'dragleave' && e.target !== dropzone) return;
+    dropzone.classList.remove('is-dragging');
+    if (scan) scan.hidden = true;
+  }));
+  dropzone.addEventListener('drop', (e) => {
+    if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+  });
+  input.addEventListener('change', () => {
+    if (input.files) addFiles(input.files);
+    input.value = '';
+  });
+
+  document.querySelectorAll('input[name="resize-mode"]').forEach((el) => el.addEventListener('change', () => {
+    updateControlVisibility();
+    drawPreview();
+  }));
+  document.querySelectorAll('input[name="output"]').forEach((el) => el.addEventListener('change', updateOutputUI));
+  widthInput.addEventListener('input', () => { syncPixelInputs('width'); drawPreview(); });
+  heightInput.addEventListener('input', () => { syncPixelInputs('height'); drawPreview(); });
+  lockAspect.addEventListener('change', () => {
+    if (lockAspect.checked) syncPixelInputs('width');
+    drawPreview();
+  });
+  percentInput.addEventListener('input', () => {
+    percentVal.textContent = percentInput.value;
+    drawPreview();
+  });
+  qSlider.addEventListener('input', () => { qVal.textContent = qSlider.value; });
+  document.querySelectorAll('[data-preset]').forEach((el) => el.addEventListener('click', () => {
+    const value = (el as HTMLButtonElement).dataset.preset || '50%';
+    if (value.endsWith('%')) {
+      (document.querySelector('input[name="resize-mode"][value="percent"]') as HTMLInputElement).checked = true;
+      percentInput.value = value.replace('%', '');
+      percentVal.textContent = percentInput.value;
+    } else {
+      (document.querySelector('input[name="resize-mode"][value="pixels"]') as HTMLInputElement).checked = true;
+      widthInput.value = value;
+      syncPixelInputs('width');
+    }
+    updateControlVisibility();
+    drawPreview();
+  }));
+
+  async function canvasToBlob(canvas: HTMLCanvasElement, out: Output): Promise<Blob> {
+    const mime = out === 'png' ? 'image/png' : out === 'webp' ? 'image/webp' : 'image/jpeg';
+    let source = canvas;
+    if (out === 'jpg') {
+      source = document.createElement('canvas');
+      source.width = canvas.width;
+      source.height = canvas.height;
+      const ctx = source.getContext('2d');
+      if (!ctx) throw new Error('canvas unavailable');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, source.width, source.height);
+      ctx.drawImage(canvas, 0, 0);
+    }
+    const blob = await new Promise<Blob | null>((resolve) => source.toBlob(resolve, mime, quality()));
+    if (!blob) throw new Error('could not encode');
+    return blob;
+  }
+
+  function uniqueName(base: string, ext: string, seen: Set<string>): string {
+    let name = `${base}.${ext}`;
+    let n = 2;
+    while (seen.has(name)) { name = `${base} (${n}).${ext}`; n++; }
+    seen.add(name);
+    return name;
+  }
+
+  resizeBtn.addEventListener('click', async () => {
+    if (items.length === 0 || working) return;
+    working = true;
+    resizeBtn.disabled = true;
+    const out = readOutput();
+    setProgress(1, `Resizing 1 of ${items.length}`);
+    try {
+      const blobs: { name: string; blob: Blob }[] = [];
+      const seen = new Set<string>();
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        setProgress((i / items.length) * 90 + 3, `Resizing ${i + 1} of ${items.length}`);
+        await loadItem(item);
+        const canvas = resizeCanvas(item.source!);
+        const blob = await canvasToBlob(canvas, out);
+        item.status = 'done';
+        item.outSize = blob.size;
+        blobs.push({ name: uniqueName(`${stripExtension(item.file.name)}-resized`, out, seen), blob });
+        render();
+      }
+
+      setProgress(95, 'Packaging');
+      if (blobs.length === 1) {
+        downloadBlob(blobs[0].blob, blobs[0].name);
+      } else {
+        const zip = new JSZip();
+        for (const item of blobs) zip.file(item.name, item.blob);
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        downloadBlob(zipBlob, `dtmp-resize-${todayStamp()}.zip`);
+      }
+      setProgress(100, `Done · ${blobs.length} file${blobs.length === 1 ? '' : 's'}`);
+    } catch (err) {
+      console.error(err);
+      showErr('Something went wrong while resizing the image.');
+      setProgress(0, 'Idle');
+    } finally {
+      working = false;
+      setTimeout(() => setProgress(0, 'Idle'), 1800);
+      render();
+    }
+  });
+
+  updateControlVisibility();
+  updateOutputUI();
+</script>
