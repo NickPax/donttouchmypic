@@ -1,0 +1,350 @@
+---
+// Client-side image compressor. Images are decoded and re-encoded entirely in
+// the browser; HEIC uses the local libheif WASM decoder and batches use JSZip.
+import AdSlot from '../AdSlot.astro';
+---
+<section id="tool" class="mx-auto max-w-[1320px] px-5 sm:px-8 pt-10 pb-16">
+  <div class="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8">
+    <div>
+      <div id="dropzone" class="drop-target relative rounded-sm p-10 md:p-14 text-center cursor-pointer" role="button" tabindex="0" aria-label="Drop images here, or click to browse">
+        <div class="scanline rounded-sm" data-scanline hidden></div>
+        <div class="relative">
+          <div class="mx-auto w-14 h-14 inline-flex items-center justify-center rounded-sm bg-[color-mix(in_srgb,var(--color-amber)_18%,var(--color-cream))] text-[var(--color-amber)]">
+            <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="9" width="16" height="7" rx="1"/><path d="M8 5l4 2 4-2M8 20l4-2 4 2"/></svg>
+          </div>
+          <h2 class="mt-5 display-3">Drop images to make them lighter.</h2>
+          <p class="mt-2 text-sm text-[color-mix(in_srgb,var(--color-ink)_75%,transparent)]">
+            Drag straight from a file window — or <button type="button" id="browse" class="underline decoration-[var(--color-amber)] decoration-2 underline-offset-4">browse</button>.
+            HEIC, JPG, PNG, WebP, GIF &amp; more · one image or a whole batch.
+          </p>
+        </div>
+        <input id="file-input" type="file" multiple class="sr-only" />
+      </div>
+
+      <div id="file-panel" class="mt-6 hidden">
+        <div class="card p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="chip chip-ink" id="chip-count">0 files</span>
+              <span class="chip" id="chip-size">0 B</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="add-more" class="btn btn-ghost !py-2 !px-3">Add more</button>
+              <button type="button" id="clear-all" class="btn btn-ghost !py-2 !px-3">Clear</button>
+            </div>
+          </div>
+
+          <ul id="file-list" class="divide-y divide-[var(--color-rule)] border-y border-[var(--color-rule)]"></ul>
+
+          <div class="mt-6 grid xl:grid-cols-[minmax(0,1fr)_300px] gap-6">
+            <div class="space-y-6">
+              <div>
+                <div class="flex items-center justify-between gap-4">
+                  <label for="quality" class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Image quality</label>
+                  <span class="font-mono text-sm"><span id="quality-val">72</span>%</span>
+                </div>
+                <input id="quality" type="range" min="35" max="95" step="1" value="72" class="w-full mt-3 accent-[var(--color-amber)]" />
+                <p class="mt-2 text-xs text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Lower is smaller. 72% is the everyday balance for photos.</p>
+              </div>
+
+              <div class="rule pt-5">
+                <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Quick recipe</div>
+                <div class="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button type="button" data-recipe="85:0" class="btn btn-ghost !justify-center !py-2 !px-3">Light</button>
+                  <button type="button" data-recipe="72:2560" class="btn btn-ghost !justify-center !py-2 !px-3">Balanced</button>
+                  <button type="button" data-recipe="58:1920" class="btn btn-ghost !justify-center !py-2 !px-3">Small</button>
+                  <button type="button" data-recipe="45:1280" class="btn btn-ghost !justify-center !py-2 !px-3">Ruthless</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-5">
+              <div>
+                <label for="edge" class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Limit longest edge</label>
+                <select id="edge" class="mt-2 w-full rounded-sm border border-[var(--color-rule)] bg-[var(--color-paper)] px-3 py-2 font-mono text-sm">
+                  <option value="0">Keep original pixels</option>
+                  <option value="2560" selected>2560 px · high-res</option>
+                  <option value="1920">1920 px · screen-ready</option>
+                  <option value="1280">1280 px · email-friendly</option>
+                </select>
+                <p class="mt-2 text-xs text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Downscaling oversized photos often saves more than quality alone.</p>
+              </div>
+
+              <div class="rule pt-5">
+                <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Save as</div>
+                <div class="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Output format">
+                  {['jpg', 'webp'].map((fmt) => (
+                    <label class="cursor-pointer">
+                      <input type="radio" name="output" value={fmt} checked={fmt === 'jpg'} class="sr-only peer" />
+                      <span class="block text-center py-2 px-2 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">{fmt}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 flex flex-wrap items-end justify-between gap-4 rule pt-5">
+            <div class="w-full min-w-0 sm:flex-1">
+              <div class="flex items-center justify-between mb-1.5 font-mono text-[11px] tracking-[0.12em] uppercase text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">
+                <span id="status-label">Ready</span><span id="progress-num">0%</span>
+              </div>
+              <div class="bar"><span id="progress-bar" style="width:0%"></span></div>
+              <div class="mt-3 grid grid-cols-[1fr_auto_1fr] gap-2 sm:gap-4 items-center">
+                <div class="min-w-0"><div class="kicker text-[10px]">Source</div><div id="in-stat" class="font-display text-[22px] sm:text-[26px] leading-none mt-0.5 truncate">—</div></div>
+                <span class="font-mono text-[16px] text-[color-mix(in_srgb,var(--color-ink)_55%,transparent)]" aria-hidden="true">→</span>
+                <div class="min-w-0"><div class="kicker text-[10px]">Compressed</div><div id="out-stat" class="font-display text-[22px] sm:text-[26px] leading-none mt-0.5 truncate">—</div></div>
+              </div>
+              <div id="saved-line" class="mt-1 text-[11px] font-mono text-[var(--color-emerald-dk)] hidden"></div>
+            </div>
+            <button id="compress-btn" class="btn btn-primary" disabled>Compress &amp; download <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v14M6 11l6 6 6-6M5 21h14"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <div id="err" role="alert" class="mt-6 hidden border border-[var(--color-red-stamp)] bg-[var(--color-red-stamp-bg)] text-[var(--color-red-stamp)] font-mono text-xs uppercase tracking-[0.14em] p-3 rounded-sm"></div>
+    </div>
+
+    <aside class="space-y-5">
+      <div class="card p-5">
+        <div class="section-num">Local runtime</div>
+        <h3 class="font-display text-[22px] mt-1 leading-tight">What's running?</h3>
+        <ul class="mt-3 text-sm space-y-2 font-mono">
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Decoder</span><span>Canvas 2D / libheif</span></li>
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Encoder</span><span>JPEG / WebP</span></li>
+          <li class="flex justify-between gap-4"><span class="text-[color-mix(in_srgb,var(--color-ink)_65%,transparent)]">Network</span><span class="text-[var(--color-emerald-dk)]">idle</span></li>
+        </ul>
+      </div>
+      <AdSlot position="compress-sidebar" size="300x250" />
+      <div class="card-ink p-5">
+        <div class="font-mono text-[11px] tracking-[0.2em] uppercase opacity-80">Good to know</div>
+        <p class="mt-2 text-[15px] leading-relaxed">Compression writes a fresh image, which strips camera and location metadata. JPG gives the broadest compatibility; WebP is often smaller and keeps transparent backgrounds.</p>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<script>
+  import JSZip from 'jszip';
+  import { formatBytes, downloadBlob, stripExtension, todayStamp } from '../../lib/format.ts';
+
+  type Output = 'jpg' | 'webp';
+  type Item = { id: string; file: File; format: string; status: 'ready' | 'done' | 'error'; outSize?: number; width?: number; height?: number };
+
+  const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const dropzone = byId<HTMLDivElement>('dropzone');
+  const input = byId<HTMLInputElement>('file-input');
+  const browse = byId<HTMLButtonElement>('browse');
+  const panel = byId<HTMLDivElement>('file-panel');
+  const addMore = byId<HTMLButtonElement>('add-more');
+  const clearAll = byId<HTMLButtonElement>('clear-all');
+  const list = byId<HTMLUListElement>('file-list');
+  const chipCount = byId<HTMLSpanElement>('chip-count');
+  const chipSize = byId<HTMLSpanElement>('chip-size');
+  const quality = byId<HTMLInputElement>('quality');
+  const qualityVal = byId<HTMLSpanElement>('quality-val');
+  const edge = byId<HTMLSelectElement>('edge');
+  const button = byId<HTMLButtonElement>('compress-btn');
+  const progressBar = byId<HTMLSpanElement>('progress-bar');
+  const progressNum = byId<HTMLSpanElement>('progress-num');
+  const statusLabel = byId<HTMLSpanElement>('status-label');
+  const inStat = byId<HTMLDivElement>('in-stat');
+  const outStat = byId<HTMLDivElement>('out-stat');
+  const savedLine = byId<HTMLDivElement>('saved-line');
+  const err = byId<HTMLDivElement>('err');
+  const scan = dropzone.querySelector('[data-scanline]') as HTMLDivElement;
+  const items: Item[] = [];
+  const HEIC_BRANDS = new Set(['heic', 'heix', 'heim', 'heis', 'mif1', 'msf1', 'hevc', 'hevx', 'hevm', 'hevs']);
+  let working = false;
+  let errorTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function output(): Output {
+    return (document.querySelector('input[name="output"]:checked') as HTMLInputElement | null)?.value === 'webp' ? 'webp' : 'jpg';
+  }
+  function setProgress(value: number, label?: string) {
+    const clamped = Math.max(0, Math.min(100, value));
+    progressBar.style.width = `${clamped}%`;
+    progressNum.textContent = `${Math.round(clamped)}%`;
+    if (label) statusLabel.textContent = label;
+  }
+  function showError(message: string) {
+    if (errorTimer) clearTimeout(errorTimer);
+    err.textContent = message;
+    err.classList.remove('hidden');
+    errorTimer = setTimeout(() => err.classList.add('hidden'), 6500);
+  }
+  function render() {
+    panel.classList.toggle('hidden', items.length === 0);
+    const sourceSize = items.reduce((total, item) => total + item.file.size, 0);
+    const completed = items.filter((item) => item.outSize !== undefined);
+    const compressedSize = completed.reduce((total, item) => total + (item.outSize || 0), 0);
+    chipCount.textContent = `${items.length} file${items.length === 1 ? '' : 's'}`;
+    chipSize.textContent = formatBytes(sourceSize);
+    button.disabled = working || items.length === 0;
+    quality.disabled = working;
+    edge.disabled = working;
+    document.querySelectorAll<HTMLInputElement>('input[name="output"]').forEach((control) => { control.disabled = working; });
+    document.querySelectorAll<HTMLButtonElement>('[data-recipe]').forEach((control) => { control.disabled = working; });
+    inStat.textContent = items.length ? formatBytes(sourceSize) : '—';
+    outStat.textContent = completed.length === items.length && items.length ? formatBytes(compressedSize) : '—';
+    const saved = sourceSize - compressedSize;
+    savedLine.classList.toggle('hidden', !(completed.length === items.length && saved > 0));
+    if (completed.length === items.length && saved > 0) savedLine.textContent = `${formatBytes(saved)} smaller · ${Math.round((saved / sourceSize) * 100)}% saved`;
+
+    list.innerHTML = '';
+    for (const item of items) {
+      const row = document.createElement('li');
+      row.className = 'p-3 flex items-center gap-3 min-w-0';
+      const detail = document.createElement('div');
+      detail.className = 'min-w-0 flex-1';
+      const name = document.createElement('div');
+      name.className = 'font-display text-[19px] leading-tight truncate';
+      name.textContent = item.file.name;
+      const meta = document.createElement('div');
+      meta.className = 'mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]';
+      meta.textContent = `${item.format.toUpperCase()} · ${formatBytes(item.file.size)}${item.width ? ` · ${item.width}×${item.height}` : ''}${item.outSize ? ` → ${formatBytes(item.outSize)}` : ''}`;
+      if (item.status === 'done') meta.classList.add('text-[var(--color-emerald-dk)]');
+      detail.append(name, meta);
+      row.appendChild(detail);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.disabled = working;
+      remove.className = 'w-8 h-8 inline-flex items-center justify-center border border-[var(--color-rule)] rounded-sm hover:bg-[var(--color-paper-2)] disabled:opacity-40';
+      remove.setAttribute('aria-label', `Remove ${item.file.name}`);
+      remove.innerHTML = '<svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+      remove.addEventListener('click', () => { items.splice(items.indexOf(item), 1); render(); });
+      row.appendChild(remove);
+      list.appendChild(row);
+    }
+  }
+
+  // A completed size only describes the current settings. Clear it as soon
+  // as the user changes the recipe, rather than presenting a stale saving.
+  function invalidateCompleted() {
+    if (working || !items.some((item) => item.outSize !== undefined)) return;
+    items.forEach((item) => { item.outSize = undefined; if (item.status === 'done') item.status = 'ready'; });
+    setProgress(0, 'Ready');
+    render();
+  }
+
+  async function detectFormat(file: File): Promise<string | null> {
+    try {
+      const bytes = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+      if (bytes.length < 12) return null;
+      if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpg';
+      if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png';
+      if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'gif';
+      if (bytes[0] === 0x42 && bytes[1] === 0x4d) return 'bmp';
+      const text = String.fromCharCode(...bytes);
+      if (text.slice(0, 4) === 'RIFF' && text.slice(8, 12) === 'WEBP') return 'webp';
+      if (text.slice(4, 8) === 'ftyp') {
+        const brand = text.slice(8, 12);
+        if (HEIC_BRANDS.has(brand)) return 'heic';
+        if (brand === 'avif' || brand === 'avis') return 'avif';
+      }
+      return /\.hei[cf]$/i.test(file.name) ? 'heic' : null;
+    } catch { return null; }
+  }
+  async function bitmapFor(item: Item): Promise<ImageBitmap> {
+    if (item.format === 'heic') {
+      const { default: heic2any } = await import('heic2any');
+      const result = await heic2any({ blob: item.file, toType: 'image/png' });
+      return createImageBitmap(Array.isArray(result) ? result[0] : result);
+    }
+    return createImageBitmap(item.file, { imageOrientation: 'from-image' });
+  }
+  async function compress(item: Item, format: Output): Promise<Blob> {
+    const bitmap = await bitmapFor(item);
+    const maxEdge = Math.max(0, Number(edge.value) || 0);
+    const scale = maxEdge ? Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height)) : 1;
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    item.width = width;
+    item.height = height;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas is unavailable.');
+    if (format === 'jpg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height); }
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, format === 'webp' ? 'image/webp' : 'image/jpeg', Number(quality.value) / 100));
+    if (!blob) throw new Error('Your browser could not encode this image.');
+    return blob;
+  }
+  function uniqueName(base: string, extension: string, names: Set<string>) {
+    let name = `${base}.${extension}`;
+    let n = 2;
+    while (names.has(name)) name = `${base} (${n++}).${extension}`;
+    names.add(name);
+    return name;
+  }
+  async function addFiles(files: FileList | File[]) {
+    let skipped = 0;
+    const incoming: Item[] = [];
+    for (const file of Array.from(files)) {
+      const format = await detectFormat(file);
+      if (format) incoming.push({ id: crypto.randomUUID(), file, format, status: 'ready' }); else skipped++;
+    }
+    if (!incoming.length && skipped) showError('No supported images there — drop HEIC, JPG, PNG, WebP, GIF or BMP files.');
+    else if (skipped) showError(`${skipped} file${skipped === 1 ? '' : 's'} skipped — not a supported image.`);
+    if (incoming.length) { items.push(...incoming); render(); }
+  }
+
+  dropzone.addEventListener('click', (event) => { if ((event.target as HTMLElement).id !== 'browse') input.click(); });
+  dropzone.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); input.click(); } });
+  browse.addEventListener('click', (event) => { event.stopPropagation(); input.click(); });
+  addMore.addEventListener('click', () => input.click());
+  clearAll.addEventListener('click', () => { if (!working) { items.length = 0; setProgress(0, 'Ready'); render(); } });
+  input.addEventListener('change', () => { if (input.files) addFiles(input.files); input.value = ''; });
+  ['dragenter', 'dragover'].forEach((eventName) => dropzone.addEventListener(eventName, (event) => { event.preventDefault(); dropzone.classList.add('is-dragging'); scan.hidden = false; }));
+  ['dragleave', 'drop'].forEach((eventName) => dropzone.addEventListener(eventName, (event) => { event.preventDefault(); if (eventName === 'dragleave' && event.target !== dropzone) return; dropzone.classList.remove('is-dragging'); scan.hidden = true; }));
+  dropzone.addEventListener('drop', (event) => { if (event.dataTransfer?.files) addFiles(event.dataTransfer.files); });
+  quality.addEventListener('input', () => { qualityVal.textContent = quality.value; invalidateCompleted(); });
+  edge.addEventListener('change', invalidateCompleted);
+  document.querySelectorAll<HTMLInputElement>('input[name="output"]').forEach((control) => control.addEventListener('change', invalidateCompleted));
+  document.querySelectorAll<HTMLButtonElement>('[data-recipe]').forEach((recipe) => recipe.addEventListener('click', () => {
+    const [nextQuality, nextEdge] = (recipe.dataset.recipe || '72:2560').split(':');
+    quality.value = nextQuality; qualityVal.textContent = nextQuality; edge.value = nextEdge;
+    invalidateCompleted();
+  }));
+
+  button.addEventListener('click', async () => {
+    if (!items.length || working) return;
+    working = true;
+    const format = output();
+    const results: { name: string; blob: Blob }[] = [];
+    const names = new Set<string>();
+    setProgress(1, `Compressing 1 of ${items.length}`);
+    render();
+    try {
+      for (let index = 0; index < items.length; index++) {
+        const item = items[index];
+        setProgress((index / items.length) * 90 + 3, `Compressing ${index + 1} of ${items.length}`);
+        const blob = await compress(item, format);
+        item.outSize = blob.size;
+        item.status = 'done';
+        results.push({ name: uniqueName(`${stripExtension(item.file.name)}-compressed`, format, names), blob });
+        render();
+      }
+      setProgress(95, 'Packaging');
+      if (results.length === 1) downloadBlob(results[0].blob, results[0].name);
+      else {
+        const zip = new JSZip();
+        results.forEach((result) => zip.file(result.name, result.blob));
+        downloadBlob(await zip.generateAsync({ type: 'blob' }), `dtmp-compress-${todayStamp()}.zip`);
+      }
+      setProgress(100, `Done · ${results.length} file${results.length === 1 ? '' : 's'}`);
+    } catch (cause) {
+      console.error(cause);
+      showError('Something went wrong while compressing that image. Try a smaller batch or a different format.');
+      setProgress(0, 'Ready');
+    } finally {
+      working = false;
+      render();
+    }
+  });
+</script>

@@ -1,0 +1,41 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ToolHeader from '../components/ToolHeader.astro';
+import CompressTool from '../components/tools/CompressTool.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Faq from '../components/Faq.astro';
+import RelatedTools from '../components/RelatedTools.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { SITE_NAME, SITE_URL } from '../lib/constants';
+
+const title = 'Compress images online — private, free, nothing uploads · ' + SITE_NAME;
+const description = 'Compress JPG, PNG, WebP and iPhone HEIC images in your browser. Choose a quality level and size cap, then download smaller JPG or WebP files. Batch-friendly, free and private.';
+const steps = [
+  { title: 'Drop your images', body: 'Add one photo or a batch. The files stay in this browser tab; there is no upload step or server-side processing.' },
+  { title: 'Choose the trade-off', body: 'Pick a quick recipe or set your own quality and longest-edge limit. Larger photos can save dramatically when downscaled for screens.' },
+  { title: 'Download the smaller files', body: 'One compressed image downloads directly. A batch is packed into a zip locally, ready to send or upload wherever you need it.' },
+];
+const faq = [
+  { q: 'Does image compression upload my files?', a: 'No. This compressor uses Canvas inside your browser tab. The site is static and has no backend upload endpoint.' },
+  { q: 'What do the compression recipes do?', a: 'Light preserves more detail. Balanced is a strong everyday setting. Small and Ruthless reduce quality and cap the longest edge, which produces much smaller files for email and chat.' },
+  { q: 'Should I choose JPG or WebP?', a: '<strong>JPG</strong> is the safest choice when the recipient or service needs broad compatibility. <strong>WebP</strong> is usually smaller and can preserve transparency, but some older apps do not accept it.' },
+  { q: 'Can I compress a whole batch?', a: 'Yes. Add as many images as your browser memory can handle. Results download together in a zip file.' },
+  { q: 'Can I compress iPhone HEIC photos?', a: 'Yes. HEIC and HEIF images decode locally with libheif, then export as JPG or WebP in your browser.' },
+  { q: 'Will the compressed files retain metadata?', a: 'No. Exporting creates fresh images and removes EXIF metadata such as location, camera model and timestamp.' },
+];
+const sd = [
+  { '@context': 'https://schema.org', '@type': 'WebApplication', name: `${SITE_NAME} Image Compressor`, url: `${SITE_URL}/compress`, applicationCategory: 'Utilities', operatingSystem: 'Any (browser-based)', offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }, description },
+  { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a.replace(/<[^>]+>/g, '') } })) },
+];
+---
+<BaseLayout title={title} description={description} path="/compress" structuredData={sd}>
+  <ToolHeader kicker="Tool · 02" title="Compress" tagline="Keep the picture. Lose the weight." description="Shrink heavy photos for email, forms and web uploads. Pick a quality, cap oversized images if you want, and download — no image ever leaves this browser." accent="amber">
+    <svg slot="icon" viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="9" width="16" height="7" rx="1"/><path d="M8 5l4 2 4-2M8 20l4-2 4 2"/></svg>
+  </ToolHeader>
+  <CompressTool />
+  <AdSlot position="compress-under-tool" size="970x250" />
+  <HowItWorks steps={steps} heading="How image compression works" />
+  <Faq items={faq} heading="Compress images · FAQ" />
+  <AdSlot position="compress-faq-bottom" size="728x90" />
+  <RelatedTools current="compress" />
+</BaseLayout>
