@@ -36,6 +36,54 @@ import AdSlot from '../AdSlot.astro';
 
           <ul id="file-list" class="divide-y divide-[var(--color-rule)] border-y border-[var(--color-rule)]"></ul>
 
+          <!-- The selected batch item is re-encoded whenever settings change.
+               Both panes use the same display dimensions so differences in
+               compression are easy to compare rather than being masked by a
+               different preview scale. -->
+          <div class="mt-6">
+            <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+              <div>
+                <div class="font-mono text-[11px] tracking-[0.14em] uppercase text-[color-mix(in_srgb,var(--color-ink)_70%,transparent)]">Live comparison</div>
+                <p class="mt-1 text-xs text-[color-mix(in_srgb,var(--color-ink)_68%,transparent)]">Change any setting below. The selected image and its exact compressed size update here.</p>
+              </div>
+              <span id="preview-status" class="chip">Preparing preview…</span>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-px border border-[var(--color-rule)] bg-[var(--color-rule)] rounded-sm overflow-hidden">
+              <figure class="bg-[var(--color-paper)] min-w-0">
+                <figcaption class="px-4 py-3 flex items-start justify-between gap-4 border-b border-[var(--color-rule)]">
+                  <div class="min-w-0">
+                    <div class="kicker text-[10px]">Original</div>
+                    <div id="original-name" class="font-display text-[20px] leading-tight truncate">—</div>
+                  </div>
+                  <span id="original-size" class="chip chip-ink shrink-0">—</span>
+                </figcaption>
+                <div class="min-h-[260px] sm:min-h-[320px] p-3 flex items-center justify-center bg-[var(--color-paper-2)]">
+                  <canvas id="original-preview" class="block max-w-full max-h-[440px] bg-[var(--color-paper)]" role="img" aria-label="Original image preview"></canvas>
+                </div>
+                <div id="original-dimensions" class="px-4 py-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--color-ink)_62%,transparent)]">—</div>
+              </figure>
+
+              <figure class="bg-[var(--color-paper)] min-w-0">
+                <figcaption class="px-4 py-3 flex items-start justify-between gap-4 border-b border-[var(--color-rule)]">
+                  <div class="min-w-0">
+                    <div class="kicker text-[10px]">With current settings</div>
+                    <div id="compressed-name" class="font-display text-[20px] leading-tight truncate">Compressed preview</div>
+                  </div>
+                  <span id="preview-size" class="chip chip-green shrink-0">Calculating…</span>
+                </figcaption>
+                <div class="relative min-h-[260px] sm:min-h-[320px] p-3 flex items-center justify-center bg-[var(--color-paper-2)]">
+                  <canvas id="compressed-preview" class="block max-w-full max-h-[440px] bg-[var(--color-paper)]" role="img" aria-label="Compressed image preview"></canvas>
+                  <div id="preview-empty" class="absolute inset-0 flex items-center justify-center p-6 text-center font-mono text-[11px] uppercase tracking-[0.14em] text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]">Encoding preview locally…</div>
+                </div>
+                <div class="px-4 py-3 flex items-center justify-between gap-3">
+                  <span id="compressed-dimensions" class="font-mono text-[10px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--color-ink)_62%,transparent)]">—</span>
+                  <span id="preview-saving" class="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-emerald-dk)]"></span>
+                </div>
+              </figure>
+            </div>
+          </div>
+
           <div class="mt-6 grid xl:grid-cols-[minmax(0,1fr)_300px] gap-6">
             <div class="space-y-6">
               <div>
@@ -79,6 +127,10 @@ import AdSlot from '../AdSlot.astro';
                       <span class="block text-center py-2 px-2 rounded-sm border border-[var(--color-rule)] font-mono text-xs uppercase tracking-[0.1em] peer-checked:bg-[var(--color-navy-800)] peer-checked:text-[var(--color-paper)] peer-checked:border-[var(--color-navy-800)] transition-colors">{fmt}</span>
                     </label>
                   ))}
+                </div>
+                <div id="format-note" class="mt-3 border-l-2 border-[var(--color-amber)] pl-3">
+                  <div id="format-note-title" class="font-mono text-[10px] uppercase tracking-[0.14em]">JPG · works almost everywhere</div>
+                  <p id="format-note-copy" class="mt-1 text-xs leading-relaxed text-[color-mix(in_srgb,var(--color-ink)_72%,transparent)]">Best for photos headed to email, forms, or older apps. It cannot keep transparency, so transparent pixels become white.</p>
                 </div>
               </div>
             </div>
@@ -129,7 +181,16 @@ import AdSlot from '../AdSlot.astro';
   import { formatBytes, downloadBlob, stripExtension, todayStamp } from '../../lib/format.ts';
 
   type Output = 'jpg' | 'webp';
-  type Item = { id: string; file: File; format: string; status: 'ready' | 'done' | 'error'; outSize?: number; width?: number; height?: number };
+  type Item = {
+    id: string;
+    file: File;
+    format: string;
+    status: 'ready' | 'done' | 'error';
+    outSize?: number;
+    width?: number;
+    height?: number;
+    source?: HTMLCanvasElement;
+  };
 
   const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const dropzone = byId<HTMLDivElement>('dropzone');
@@ -144,6 +205,19 @@ import AdSlot from '../AdSlot.astro';
   const quality = byId<HTMLInputElement>('quality');
   const qualityVal = byId<HTMLSpanElement>('quality-val');
   const edge = byId<HTMLSelectElement>('edge');
+  const originalPreview = byId<HTMLCanvasElement>('original-preview');
+  const compressedPreview = byId<HTMLCanvasElement>('compressed-preview');
+  const originalName = byId<HTMLDivElement>('original-name');
+  const originalSize = byId<HTMLSpanElement>('original-size');
+  const originalDimensions = byId<HTMLDivElement>('original-dimensions');
+  const compressedName = byId<HTMLDivElement>('compressed-name');
+  const compressedDimensions = byId<HTMLSpanElement>('compressed-dimensions');
+  const previewSize = byId<HTMLSpanElement>('preview-size');
+  const previewSaving = byId<HTMLSpanElement>('preview-saving');
+  const previewStatus = byId<HTMLSpanElement>('preview-status');
+  const previewEmpty = byId<HTMLDivElement>('preview-empty');
+  const formatNoteTitle = byId<HTMLDivElement>('format-note-title');
+  const formatNoteCopy = byId<HTMLParagraphElement>('format-note-copy');
   const button = byId<HTMLButtonElement>('compress-btn');
   const progressBar = byId<HTMLSpanElement>('progress-bar');
   const progressNum = byId<HTMLSpanElement>('progress-num');
@@ -156,7 +230,10 @@ import AdSlot from '../AdSlot.astro';
   const items: Item[] = [];
   const HEIC_BRANDS = new Set(['heic', 'heix', 'heim', 'heis', 'mif1', 'msf1', 'hevc', 'hevx', 'hevm', 'hevs']);
   let working = false;
+  let selectedId = '';
   let errorTimer: ReturnType<typeof setTimeout> | undefined;
+  let previewTimer: ReturnType<typeof setTimeout> | undefined;
+  let previewGeneration = 0;
 
   function output(): Output {
     return (document.querySelector('input[name="output"]:checked') as HTMLInputElement | null)?.value === 'webp' ? 'webp' : 'jpg';
@@ -172,6 +249,18 @@ import AdSlot from '../AdSlot.astro';
     err.textContent = message;
     err.classList.remove('hidden');
     errorTimer = setTimeout(() => err.classList.add('hidden'), 6500);
+  }
+  function selected(): Item | undefined {
+    return items.find((item) => item.id === selectedId) || items[0];
+  }
+  function updateFormatNote() {
+    if (output() === 'webp') {
+      formatNoteTitle.textContent = 'WebP · usually smaller';
+      formatNoteCopy.textContent = 'Often lighter than JPG at a similar visual quality, and it keeps transparent pixels. Ideal for websites and modern apps; some older editors and upload forms may reject it.';
+      return;
+    }
+    formatNoteTitle.textContent = 'JPG · works almost everywhere';
+    formatNoteCopy.textContent = 'Best for photos headed to email, forms, or older apps. It cannot keep transparency, so transparent pixels become white. Repeated JPG saves gradually lose detail.';
   }
   function render() {
     panel.classList.toggle('hidden', items.length === 0);
@@ -195,16 +284,26 @@ import AdSlot from '../AdSlot.astro';
     for (const item of items) {
       const row = document.createElement('li');
       row.className = 'p-3 flex items-center gap-3 min-w-0';
-      const detail = document.createElement('div');
-      detail.className = 'min-w-0 flex-1';
+      const detail = document.createElement('button');
+      detail.type = 'button';
+      detail.disabled = working;
+      detail.setAttribute('aria-pressed', item.id === selectedId ? 'true' : 'false');
+      detail.className = `min-w-0 flex-1 text-left rounded-sm p-2 -m-2 transition-colors disabled:cursor-default ${item.id === selectedId ? 'bg-[var(--color-paper-2)]' : 'hover:bg-[var(--color-paper-2)]'}`;
       const name = document.createElement('div');
-      name.className = 'font-display text-[19px] leading-tight truncate';
+      name.className = 'font-display text-[19px] leading-tight truncate flex items-center gap-2';
       name.textContent = item.file.name;
+      if (item.id === selectedId) {
+        const badge = document.createElement('span');
+        badge.className = 'chip chip-green !text-[9px] shrink-0';
+        badge.textContent = 'Previewing';
+        name.appendChild(badge);
+      }
       const meta = document.createElement('div');
       meta.className = 'mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--color-ink)_60%,transparent)]';
       meta.textContent = `${item.format.toUpperCase()} · ${formatBytes(item.file.size)}${item.width ? ` · ${item.width}×${item.height}` : ''}${item.outSize ? ` → ${formatBytes(item.outSize)}` : ''}`;
       if (item.status === 'done') meta.classList.add('text-[var(--color-emerald-dk)]');
       detail.append(name, meta);
+      detail.addEventListener('click', () => selectItem(item.id));
       row.appendChild(detail);
       const remove = document.createElement('button');
       remove.type = 'button';
@@ -212,7 +311,13 @@ import AdSlot from '../AdSlot.astro';
       remove.className = 'w-8 h-8 inline-flex items-center justify-center border border-[var(--color-rule)] rounded-sm hover:bg-[var(--color-paper-2)] disabled:opacity-40';
       remove.setAttribute('aria-label', `Remove ${item.file.name}`);
       remove.innerHTML = '<svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg>';
-      remove.addEventListener('click', () => { items.splice(items.indexOf(item), 1); render(); });
+      remove.addEventListener('click', () => {
+        const removedSelected = item.id === selectedId;
+        items.splice(items.indexOf(item), 1);
+        if (removedSelected) selectedId = items[0]?.id || '';
+        render();
+        schedulePreview(0);
+      });
       row.appendChild(remove);
       list.appendChild(row);
     }
@@ -253,12 +358,32 @@ import AdSlot from '../AdSlot.astro';
     }
     return createImageBitmap(item.file, { imageOrientation: 'from-image' });
   }
-  async function compress(item: Item, format: Output): Promise<Blob> {
+  async function sourceFor(item: Item): Promise<HTMLCanvasElement> {
+    if (item.source) return item.source;
     const bitmap = await bitmapFor(item);
-    const maxEdge = Math.max(0, Number(edge.value) || 0);
-    const scale = maxEdge ? Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height)) : 1;
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas is unavailable.');
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    item.source = canvas;
+    return canvas;
+  }
+  async function encodeItem(
+    item: Item,
+    format: Output,
+    qualityValue = Number(quality.value) / 100,
+    maxEdge = Math.max(0, Number(edge.value) || 0),
+  ): Promise<Blob> {
+    let bitmap: ImageBitmap | undefined;
+    const source: CanvasImageSource = item.source || (bitmap = await bitmapFor(item));
+    const sourceWidth = item.source?.width || bitmap!.width;
+    const sourceHeight = item.source?.height || bitmap!.height;
+    const scale = maxEdge ? Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight)) : 1;
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
     item.width = width;
     item.height = height;
     const canvas = document.createElement('canvas');
@@ -269,11 +394,104 @@ import AdSlot from '../AdSlot.astro';
     if (format === 'jpg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height); }
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(bitmap, 0, 0, width, height);
-    bitmap.close();
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, format === 'webp' ? 'image/webp' : 'image/jpeg', Number(quality.value) / 100));
+    ctx.drawImage(source, 0, 0, width, height);
+    bitmap?.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, format === 'webp' ? 'image/webp' : 'image/jpeg', qualityValue));
     if (!blob) throw new Error('Your browser could not encode this image.');
     return blob;
+  }
+  function drawPreview(target: HTMLCanvasElement, source: CanvasImageSource, width: number, height: number) {
+    const scale = Math.min(1, 720 / width, 440 / height);
+    target.width = Math.max(1, Math.round(width * scale));
+    target.height = Math.max(1, Math.round(height * scale));
+    const ctx = target.getContext('2d');
+    if (!ctx) throw new Error('Canvas is unavailable.');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.clearRect(0, 0, target.width, target.height);
+    ctx.drawImage(source, 0, 0, target.width, target.height);
+  }
+  function clearPreview() {
+    previewGeneration++;
+    if (previewTimer) clearTimeout(previewTimer);
+    originalPreview.width = 0;
+    originalPreview.height = 0;
+    compressedPreview.width = 0;
+    compressedPreview.height = 0;
+    originalName.textContent = '—';
+    originalSize.textContent = '—';
+    originalDimensions.textContent = '—';
+    compressedName.textContent = 'Compressed preview';
+    compressedDimensions.textContent = '—';
+    previewSize.textContent = '—';
+    previewSaving.textContent = '';
+    previewStatus.textContent = 'Add an image';
+    previewEmpty.textContent = 'Choose an image to compare';
+    previewEmpty.classList.remove('hidden');
+  }
+  function schedulePreview(delay = 320) {
+    previewGeneration++;
+    const generation = previewGeneration;
+    if (previewTimer) clearTimeout(previewTimer);
+    if (!selected()) { clearPreview(); return; }
+    previewStatus.textContent = 'Updating preview…';
+    previewSize.textContent = 'Calculating…';
+    previewEmpty.textContent = 'Encoding preview locally…';
+    previewEmpty.classList.remove('hidden');
+    previewTimer = setTimeout(() => updatePreview(generation), delay);
+  }
+  async function updatePreview(generation: number) {
+    const item = selected();
+    if (!item || generation !== previewGeneration) return;
+    try {
+      originalName.textContent = item.file.name;
+      originalSize.textContent = formatBytes(item.file.size);
+      const source = await sourceFor(item);
+      if (generation !== previewGeneration) return;
+      drawPreview(originalPreview, source, source.width, source.height);
+      originalDimensions.textContent = `${source.width}×${source.height} · ${item.format.toUpperCase()}`;
+
+      // Capture the controls once so this preview is internally consistent
+      // even if the user moves the slider again while encoding is underway.
+      const format = output();
+      const qualityValue = Number(quality.value) / 100;
+      const maxEdge = Math.max(0, Number(edge.value) || 0);
+      const blob = await encodeItem(item, format, qualityValue, maxEdge);
+      if (generation !== previewGeneration) return;
+      const bitmap = await createImageBitmap(blob);
+      if (generation !== previewGeneration) { bitmap.close(); return; }
+      drawPreview(compressedPreview, bitmap, bitmap.width, bitmap.height);
+      bitmap.close();
+
+      const saving = item.file.size - blob.size;
+      const percent = item.file.size ? Math.round((Math.abs(saving) / item.file.size) * 100) : 0;
+      compressedName.textContent = `${format.toUpperCase()} · ${Math.round(qualityValue * 100)}% quality`;
+      compressedDimensions.textContent = `${item.width}×${item.height} · ${format.toUpperCase()}`;
+      previewSize.textContent = formatBytes(blob.size);
+      previewSaving.textContent = saving >= 0
+        ? `${formatBytes(saving)} smaller · ${percent}% saved`
+        : `${formatBytes(Math.abs(saving))} larger`;
+      previewSaving.classList.toggle('text-[var(--color-red-stamp)]', saving < 0);
+      previewSaving.classList.toggle('text-[var(--color-emerald-dk)]', saving >= 0);
+      previewStatus.textContent = 'Preview ready';
+      previewEmpty.classList.add('hidden');
+      render();
+    } catch (cause) {
+      if (generation !== previewGeneration) return;
+      console.error(cause);
+      previewStatus.textContent = 'Preview unavailable';
+      previewSize.textContent = '—';
+      previewEmpty.textContent = 'This image could not be previewed in this browser';
+      previewEmpty.classList.remove('hidden');
+    }
+  }
+  function selectItem(id: string) {
+    selectedId = id;
+    // Keep one decoded source in memory for responsive preview changes. Batch
+    // exports decode other files only while they are being processed.
+    items.forEach((item) => { if (item.id !== id) item.source = undefined; });
+    render();
+    schedulePreview(0);
   }
   function uniqueName(base: string, extension: string, names: Set<string>) {
     let name = `${base}.${extension}`;
@@ -291,25 +509,50 @@ import AdSlot from '../AdSlot.astro';
     }
     if (!incoming.length && skipped) showError('No supported images there — drop HEIC, JPG, PNG, WebP, GIF or BMP files.');
     else if (skipped) showError(`${skipped} file${skipped === 1 ? '' : 's'} skipped — not a supported image.`);
-    if (incoming.length) { items.push(...incoming); render(); }
+    if (incoming.length) {
+      items.push(...incoming);
+      selectedId ||= incoming[0].id;
+      render();
+      schedulePreview(0);
+    }
   }
 
   dropzone.addEventListener('click', (event) => { if ((event.target as HTMLElement).id !== 'browse') input.click(); });
   dropzone.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); input.click(); } });
   browse.addEventListener('click', (event) => { event.stopPropagation(); input.click(); });
   addMore.addEventListener('click', () => input.click());
-  clearAll.addEventListener('click', () => { if (!working) { items.length = 0; setProgress(0, 'Ready'); render(); } });
+  clearAll.addEventListener('click', () => {
+    if (!working) {
+      items.length = 0;
+      selectedId = '';
+      setProgress(0, 'Ready');
+      clearPreview();
+      render();
+    }
+  });
   input.addEventListener('change', () => { if (input.files) addFiles(input.files); input.value = ''; });
   ['dragenter', 'dragover'].forEach((eventName) => dropzone.addEventListener(eventName, (event) => { event.preventDefault(); dropzone.classList.add('is-dragging'); scan.hidden = false; }));
   ['dragleave', 'drop'].forEach((eventName) => dropzone.addEventListener(eventName, (event) => { event.preventDefault(); if (eventName === 'dragleave' && event.target !== dropzone) return; dropzone.classList.remove('is-dragging'); scan.hidden = true; }));
   dropzone.addEventListener('drop', (event) => { if (event.dataTransfer?.files) addFiles(event.dataTransfer.files); });
-  quality.addEventListener('input', () => { qualityVal.textContent = quality.value; invalidateCompleted(); });
-  edge.addEventListener('change', invalidateCompleted);
-  document.querySelectorAll<HTMLInputElement>('input[name="output"]').forEach((control) => control.addEventListener('change', invalidateCompleted));
+  quality.addEventListener('input', () => {
+    qualityVal.textContent = quality.value;
+    invalidateCompleted();
+    schedulePreview();
+  });
+  edge.addEventListener('change', () => {
+    invalidateCompleted();
+    schedulePreview();
+  });
+  document.querySelectorAll<HTMLInputElement>('input[name="output"]').forEach((control) => control.addEventListener('change', () => {
+    invalidateCompleted();
+    updateFormatNote();
+    schedulePreview();
+  }));
   document.querySelectorAll<HTMLButtonElement>('[data-recipe]').forEach((recipe) => recipe.addEventListener('click', () => {
     const [nextQuality, nextEdge] = (recipe.dataset.recipe || '72:2560').split(':');
     quality.value = nextQuality; qualityVal.textContent = nextQuality; edge.value = nextEdge;
     invalidateCompleted();
+    schedulePreview();
   }));
 
   button.addEventListener('click', async () => {
@@ -324,7 +567,7 @@ import AdSlot from '../AdSlot.astro';
       for (let index = 0; index < items.length; index++) {
         const item = items[index];
         setProgress((index / items.length) * 90 + 3, `Compressing ${index + 1} of ${items.length}`);
-        const blob = await compress(item, format);
+        const blob = await encodeItem(item, format);
         item.outSize = blob.size;
         item.status = 'done';
         results.push({ name: uniqueName(`${stripExtension(item.file.name)}-compressed`, format, names), blob });
@@ -347,4 +590,6 @@ import AdSlot from '../AdSlot.astro';
       render();
     }
   });
+
+  updateFormatNote();
 </script>
